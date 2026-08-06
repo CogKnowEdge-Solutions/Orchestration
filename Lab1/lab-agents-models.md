@@ -38,6 +38,24 @@ The agent runs in a loop:
 5. **Swap the model** — build a second agent with a different model, same tools, same code.
 6. **Ask again** and watch a different brain produce the same correct answer.
 
+Here's the whole lab as a flow — the loop on the left repeats until the model can answer directly, then we swap the brain:
+
+```mermaid
+graph LR
+    S1["1. Initialize a model"]
+    S2["2. Give it a tool"]
+    S3["3. Ask a question"]
+    S4{"4. Agent loop:<br/>direct answer<br/>or tool call?"}
+    S5["5. Swap the model<br/>(new brain)"]
+    S6["6. Ask again with<br/>the new brain"]
+
+    S1 --> S2 --> S3 --> S4
+    S4 -.->|"tool call →<br/>run tool, feed result back"| S3
+    S4 -->|"can answer directly"| S5 --> S6
+```
+
+Step 4 is the heart of it: the model doesn't run your code — it asks for a tool call, and the loop executes it and hands the result back until the model can answer.
+
 ---
 
 ## 5. Output
@@ -75,9 +93,50 @@ A **model** (a chat model) is the brain: you send it text, it returns text. It h
 
 Think of it like a chef. The **model** is the chef's knowledge — recipes and judgement. The **agent** is the kitchen: the chef (model) shouts an order ("chop two onions"), and a sous-chef (the tool) does the chopping and reports back. The chef never leaves the kitchen.
 
+An agent is built from three parts — the model is only one of them:
+
+```mermaid
+graph TD
+    AG["An AGENT<br/>(the whole system)"]
+    MD["MODEL<br/>the brain<br/>produces text"]
+    TL["TOOLS<br/>the hands<br/>functions it can call"]
+    LP["LOOP<br/>the schedule<br/>decides when<br/>to use a tool"]
+
+    AG --> MD
+    AG --> TL
+    AG --> LP
+    style AG fill:#c8e6c9
+    style MD fill:#e1f5ff
+    style TL fill:#ffe0b2
+    style LP fill:#fff9c4
+```
+
+This is why you can swap the model freely: it's just one of the three parts. The tools and the loop stay put.
+
 ### Tool calling
 
 Modern chat models are trained to output not just text but **structured tool requests** — "I want to call `multiply` with 8 and 7." LangChain's agent sees that request, runs your Python function, and sends the function's output back to the model as a new message. The model then produces the final answer.
+
+Step by step, that round-trip looks like this:
+
+```mermaid
+sequenceDiagram
+    participant U as You
+    participant AG as Agent
+    participant M as Model
+    participant T as multiply tool
+
+    U->>AG: "What is 8 * 7?"
+    AG->>M: pass your question along
+    M->>AG: request a tool call: multiply(8, 7)
+    AG->>T: run the function for real
+    T->>AG: returns 56
+    AG->>M: feed the result back
+    M->>AG: "8 * 7 is 56"
+    AG->>U: you see the answer
+```
+
+Notice the model never computes anything — it only *asks* for the tool call, and the agent loop does the actual work. That separation is the entire idea behind agents.
 
 ### Why model-swapping is free
 
