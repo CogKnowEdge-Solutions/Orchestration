@@ -105,10 +105,10 @@ graph TD
     AG --> MD
     AG --> TL
     AG --> LP
-    style AG fill:#c8e6c9
-    style MD fill:#e1f5ff
-    style TL fill:#ffe0b2
-    style LP fill:#fff9c4
+    style AG fill:#c8e6c9,color:#1a1a1a
+    style MD fill:#e1f5ff,color:#1a1a1a
+    style TL fill:#ffe0b2,color:#1a1a1a
+    style LP fill:#fff9c4,color:#1a1a1a
 ```
 
 This is why you can swap the model freely: it's just one of the three parts. The tools and the loop stay put.
