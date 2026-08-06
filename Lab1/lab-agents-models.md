@@ -8,6 +8,31 @@
 
 Your first LangChain lab. You will build a tiny AI **agent**, give it a tool, and then **swap the model** underneath it — proving the model is a swappable part, not the whole system.
 
+### What is a model?
+
+A **model** (a chat model) is a program trained on an enormous amount of text. You send it a message; it predicts the most likely words to come next — which is why it can answer questions, explain things, and chat naturally. Think of it as an extremely well-read friend who has never left the library: it knows a lot, but it cannot look anything up, cannot calculate reliably, and cannot touch anything. A model is all talk.
+
+Two things matter for this lab:
+
+- **Models are different people.** GPT, Gemini, Llama, Nemotron — each is a different model with different strengths, speeds, and costs. This lab exploits exactly that.
+- **A model alone can't do anything.** It can *suggest* an action, but it has no way to perform it.
+
+### What is an agent?
+
+An **agent** is a model wrapped in a framework that gives it hands. Two extra pieces turn a talk-only model into a doer:
+
+- **Tools** — small functions the model is allowed to call. Ours is a single `multiply` function.
+- **A loop** — machinery that lets the model *request* a tool call, runs the tool for real, and feeds the result back until the model can give a final answer.
+
+```mermaid
+graph LR
+    M["A MODEL<br/>talks a lot,<br/>does nothing"]
+    AG["AN AGENT<br/>model + tools + loop<br/>actually does things"]
+    M -->|"add tools<br/>and a loop"| AG
+```
+
+The key idea: **the model never runs your code.** It describes what it wants ("call `multiply` with 8 and 7"), and the agent loop executes it. That's the difference between a chatbot and an agent — and you're about to build the agent yourself. Section 7 goes deeper into how the loop works.
+
 ---
 
 ## 2. Problem Statement / Use Case Overview
@@ -196,7 +221,7 @@ Verify the environment:
 python -c "import langchain, langchain_openai; print('OK')"
 ```
 
-You should see `OK`. To run the notebook: `jupyter lab lab-agents-models.ipynb` (or open the file in VS Code).
+You should see `OK`. To run the notebook: `jupyter lab lab-agents-models.ipynb` (or open the file in VS Code). The notebook's first cell also runs the same installs, so if you skipped this step you can let it install the modules for you.
 
 ---
 
@@ -204,7 +229,15 @@ You should see `OK`. To run the notebook: `jupyter lab lab-agents-models.ipynb` 
 
 Every cell below is one logical step. Read the explanation, run the cell, look at the result, move on.
 
-### Step 1 — Load the key
+### Step 1 — Install the required modules
+
+This one command installs every module the notebook needs, with versions pinned so the lab is reproducible. Run it once, then move on. If you already set up the environment with Section 9, this cell simply reports that everything is already installed.
+
+```python
+!pip install "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv"
+```
+
+### Step 2 — Load the key
 
 This cell loads the `.env` file and fails loudly if your key is missing — better to find out here than halfway through.
 
@@ -218,7 +251,7 @@ if not os.getenv("OPENROUTER_API_KEY"):
     raise SystemExit("No OPENROUTER_API_KEY found. Add it to .env and restart the kernel.")
 ```
 
-### Step 2 — Initialize a model
+### Step 3 — Initialize a model
 
 `ChatOpenAI` is LangChain's wrapper for any OpenAI-compatible API. OpenRouter is one. `model=` is the free model ID, `base_url=` points at OpenRouter, `temperature=0` keeps answers factual.
 
@@ -233,7 +266,7 @@ model_1 = ChatOpenAI(
 )
 ```
 
-### Step 3 — Write a tool
+### Step 4 — Write a tool
 
 A tool is just a function with a clear docstring and typed arguments. LangChain reads the docstring to tell the model what the tool does.
 
@@ -243,7 +276,7 @@ def multiply(a: float, b: float) -> float:
     return a * b
 ```
 
-### Step 4 — Create the agent
+### Step 5 — Create the agent
 
 `create_agent` wraps the model and tools into the agent loop. One line.
 
@@ -253,7 +286,7 @@ from langchain.agents import create_agent
 agent = create_agent(model_1, tools=[multiply])
 ```
 
-### Step 5 — Ask a question that needs the tool
+### Step 6 — Ask a question that needs the tool
 
 `invoke` runs the whole loop. The last message in `messages` is the final answer.
 
@@ -264,7 +297,7 @@ result_1 = agent.invoke({
 result_1["messages"][-1].content
 ```
 
-### Step 6 — Swap the model
+### Step 7 — Swap the model
 
 Build a *second* agent with a different free model. Same tool, same structure — only the model changed.
 
@@ -279,7 +312,7 @@ model_2 = ChatOpenAI(
 agent_2 = create_agent(model_2, tools=[multiply])
 ```
 
-### Step 7 — Ask the same question with the new brain
+### Step 8 — Ask the same question with the new brain
 
 ```python
 result_2 = agent_2.invoke({
@@ -288,7 +321,7 @@ result_2 = agent_2.invoke({
 result_2["messages"][-1].content
 ```
 
-### Step 8 — A question with no tool needed
+### Step 9 — A question with no tool needed
 
 Agents don't always use tools. This question is answered directly from the model's knowledge.
 
