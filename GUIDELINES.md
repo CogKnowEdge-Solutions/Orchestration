@@ -15,9 +15,11 @@ constitution wins; flag it so this doc can be fixed.
 
 4. **Write the Optional Exercise as you build.** Try it before publishing; exercises often need tweaks.
 
-5. **Restart & Run All in clean environment.** Fresh venv/container built from your Section 9 instructions only.
+5. **Write the assignment file (`lab-<slug>-assignment.md`)** with exercises that test the lab's key concepts, plus an answer key. Attempt every exercise yourself before shipping.
 
-6. **Walk the Pre-Publish Checklist**, item by item, before shipping.
+6. **Restart & Run All in clean environment.** Fresh venv/container built from your Section 9 instructions only.
+
+7. **Walk the Pre-Publish Checklist**, item by item, before shipping.
 
 ## Writing Each Section Well
 
@@ -37,6 +39,22 @@ constitution wins; flag it so this doc can be fixed.
   alternatives — "Swap the vector DB from Weaviate to Milvus" not "try a
   different vector DB if you want." Specificity is what makes it actually
   attemptable.
+
+## Writing the Assignment File
+
+Every lab ships with `lab-<topic-slug>-assignment.md` — a standalone set of exercises that lets learners test what they just learned, without re-running the lab.
+
+**What goes in it:**
+- **5–10 exercises**, scaled to difficulty (Beginner: 5–7, Intermediate: 7–9, Advanced: 9–10).
+- **A mix of question types:** concept questions ("What does an embedding capture?"), short code tasks ("Write a function that chunks text into ~500-token pieces"), and applied tasks ("Given the RAG pipeline, add a reranker step").
+- **An answer key at the end** with brief explanations, not just answers — learners self-check, so the *reasoning* matters.
+- **References to the lab, not repeats.** Point exercises back at the relevant section ("see Section 7") instead of re-explaining the concept.
+
+**Rules:**
+- Exercises must be **doable from the lab alone** — no outside reading required.
+- Attempt **every exercise yourself** before publishing and verify the answer key (fold this into your Gate 5 review).
+- Learners can attempt the assignment **without re-running the notebook**; any code-based exercise should run in a scratch file.
+- The assignment is **not** the Section 11 Optional Exercise — it's a broader knowledge check.
 
 ## Choosing and Signaling Difficulty Level
 
@@ -134,6 +152,20 @@ chunked_docs = chunk_documents(documents)  # What does this do? Go read the func
 - Define it early (top cells), with a clear docstring.
 - Use it multiple times so the learner sees why you abstracted it.
 - Explain in markdown *why* you extracted this into a function (usually "we use this pattern three times, so...").
+
+## First Cell: `!pip install` the Dependencies
+
+**Every notebook's first code cell installs everything the lab needs in one line**, so a learner can install all modules directly by running the first cell:
+
+```python
+!pip install openai==1.35.0 langchain==0.2.5 weaviate-client==4.6.2
+```
+
+- **One line, all modules.** Don't scatter installs through later cells — running the first cell leaves everything ready.
+- **Pin versions** exactly as in Section 6 / Section 9 so the notebook and the setup instructions never drift.
+- **`.py` script labs:** a script can't run `!pip` — keep installs in Section 9 via `requirements.txt` + `pip install -r requirements.txt`, and note that in the checklist.
+- **Explain the cell.** One sentence right under it, e.g., "This installs the exact versions of every library used in this lab."
+- **Gate 2 test includes it.** When you `Restart & Run All`, the `!pip install` cell runs first and must succeed in a fresh environment (which your Gate 1 environment is).
 
 ## Testing, in Practice
 
@@ -287,14 +319,14 @@ Treat reviewer feedback as data. They're not critiquing you; they're showing you
 
 Section 7 (Underlying Concepts) is your chance to explain the *why* and *how* in theory before diving into code. **A well-placed diagram can save 500 words of explanation.**
 
-### Quick Decision: Should You Use a Diagram?
+### Default: Use a Mermaid Diagram
 
-Ask yourself:
+**Plan on including at least one Mermaid diagram in every lab.** A lab that explains any flow, pipeline, architecture, workflow, or relationship in prose should convert that into a diagram. Ask yourself:
 - Can I explain this concept better as a flow, architecture, or relationship than as prose?
 - Would a learner benefit from seeing how pieces connect visually?
 - Is there a pipeline, workflow, or decision tree involved?
 
-If yes to any of these, use Mermaid.
+If yes to any of these — and that will be most labs — use Mermaid. Only skip it when the concept is trivial enough that a one-sentence explanation suffices.
 
 ### Example: Vector Embeddings (Beginner Lab)
 
@@ -462,13 +494,15 @@ Before submitting a lab:
 STRUCTURE & FILES
   [ ] 12-section markdown (.md) file complete
   [ ] Code file: .ipynb or .py (match `lab-<topic-slug>` slug)
+  [ ] Assignment file `lab-<topic-slug>-assignment.md` present with 5–10 exercises + answer key
+  [ ] Every assignment exercise attempted and answer key verified
   [ ] Code ≤ limit: Beginner ≤110, Intermediate ≤150, Advanced ≤180
   [ ] Every block explained; non-obvious lines commented
   [ ] Helper functions minimized; inline code preferred
 
 CONCEPTS & DIAGRAMS
   [ ] Section 7 (concepts) ≤2 pages
-  [ ] Mermaid diagrams (if used) render and are followed by prose
+  [ ] Mermaid diagram(s) used for Section 7 concepts; render and are followed by prose
 
 TESTING (All 5 Gates)
   [ ] Gate 1: Fresh environment setup passes
@@ -480,6 +514,7 @@ TESTING (All 5 Gates)
 ENVIRONMENT & DISCLOSURE
   [ ] Compute/cost requirements disclosed
   [ ] Dependencies pinned (Section 6, 9)
+  [ ] First code cell runs `!pip install` for all required modules (.py labs: `requirements.txt`)
   [ ] No hardcoded credentials
 
 CONSISTENCY

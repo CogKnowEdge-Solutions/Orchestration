@@ -14,9 +14,10 @@ update this file to match it, not the other way around.
   different. If a request conflicts with an Article, say so explicitly and give
   the user the actual options (see "Handling Conflicts" below) — never comply
   quietly and never refuse without explaining the alternative.
-- Do not fabricate results. If Article III requires a clean-environment run, an
-  Optional Exercise test, or verified output, you must actually execute those
-  steps and report what really happened — not what should happen in theory.
+- Do not fabricate results. If a validation gate in this file requires a
+  clean-environment run, an Optional Exercise test, or verified output, you must
+  actually execute those steps and report what really happened — not what should
+  happen in theory.
 
 ## Workflow: Creating a New Lab
 
@@ -47,11 +48,16 @@ update this file to match it, not the other way around.
    Advanced). Minimize helper functions — prefer inline code unless the function
    is called multiple times or teaches a separate concept. Do not write the whole
    notebook first and add explanations after.
+   **The first cell must be a single `!pip install <module> <module> ...` line**
+   (pinned versions, matching Section 6/9) so learners can install everything by
+   running the first cell. For `.py` script labs, document `requirements.txt` in
+   Section 9 instead.
 
-6. **Validate per Article III before calling it done**:
+6. **Validate per the five gates below before calling it done**:
    - Run the notebook top-to-bottom in a fresh kernel/environment built strictly
      from your own Section 9 instructions.
    - Actually perform the Optional Exercise (Section 11) and confirm it works.
+   - Attempt every exercise in the assignment file and verify the answer key.
    - Capture real output for Section 5 — do not describe expected output from
      memory.
 
@@ -59,15 +65,28 @@ update this file to match it, not the other way around.
    result of each item. Include a specific check: "Does the code complexity and
    explanation density match the stated difficulty level?" If not, note the gap.
 
-8. **Name files per Article IV**: Use one of:
+8. **Name files per Article III (UX-4)**: Use one of:
    - `lab-<topic-slug>.ipynb` + `lab-<topic-slug>.md` (for Jupyter notebooks)
    - `lab-<topic-slug>.py` + `lab-<topic-slug>.md` (for Python scripts)
    
-   Both formats in same directory with matching slug.
+   Both formats in same directory with matching slug. Every lab also ships with
+   `lab-<topic-slug>-assignment.md` — a set of knowledge-check exercises with an
+   answer key (see UX-7), so learners can test what they learned after the lab.
 
 ## Workflow: Testing a Lab (Applying the Five Gates)
 
-After creating or editing a lab, you must execute all five gates from `CONSTITUTION.md` Section 3 in order. **Do not skip any gate.** A lab cannot pass testing if any gate fails.
+The five gates below are the end-to-end lab validation workflow. Execute them in
+order after creating or editing a lab — **do not skip any gate.** A lab cannot
+pass validation if any gate fails. The gates are defined here in AGENTS.md; they
+are no longer part of `CONSTITUTION.md` (see its version history).
+
+**Where `TEST.md` fits:** `TEST.md` (the Comprehensive Testing Guide) is the
+companion document for designing and running tests on any code the lab or its
+supporting files ship — general test-case design, the RED → GREEN → REFACTOR TDD
+cycle, pytest commands, and troubleshooting. When a lab has testable logic,
+write its tests using TEST.md's framework; the gates below then validate the lab
+artifact itself (notebook/script + markdown) end to end. The two are
+complementary, not alternatives.
 
 **Gate 1: Fresh Environment Setup**
 1. Identify where the fresh environment will be created (venv, container, system).
@@ -150,9 +169,11 @@ Overall: READY TO PUBLISH / NEEDS REWORK
 
 1. Before claiming a lab still works, re-run all five gates — dependency drift is common and silent.
 2. If an edit changes line count, re-check it against Article II's ceiling for the difficulty level.
-3. If an edit changes any of Sections 1–12, re-check Article IV consistency against at least one other published lab at the same difficulty level.
-4. Re-run all five gates after any non-trivial edit, not just the tests you think changed.
-5. If you make structural changes (e.g., add a new cell early in the pipeline), report which gates needed re-testing.
+3. If an edit changes any of Sections 1–12, re-check Article III (UX-3) consistency against at least one other published lab at the same difficulty level.
+4. If you edit the assignment file, re-attempt its exercises and verify the answer key still matches the (possibly changed) lab.
+5. Re-run all five gates after any non-trivial edit, not just the tests you think changed.
+6. If you make structural changes (e.g., add a new cell early in the pipeline), report which gates needed re-testing.
+7. If a lab no longer runs, pull it or flag it with a visible "known issue" banner immediately — a broken lab is worse than no lab.
 
 ## Handling Gate Failures
 
@@ -231,16 +252,16 @@ cite the Article by number — e.g., "split into 2a/2b per Article II's line
 ceiling." This keeps the constitution the visible authority behind every
 decision, rather than an agent's unstated judgment call.
 
-## Recommending Mermaid Diagrams
+## Including Mermaid Diagrams
 
-When a lab's Section 7 (Underlying Concepts) is dense or hard to follow, suggest adding a Mermaid diagram:
+**Default to including a Mermaid diagram.** When a lab's Section 7 (Underlying Concepts) involves a flow, pipeline, architecture, workflow, relationship, or decision tree, add a Mermaid diagram — don't wait for the user to ask.
 
-- **Read Section 7.** If it has multiple paragraphs about how pieces connect, relationships, or workflows, offer to create a diagram.
-- **Suggest, don't impose.** "This section explains the RAG pipeline in prose — would a diagram help? I can create one showing documents → chunking → embedding → retrieval → generation."
-- **Test the diagram.** If you create a diagram, render it in markdown to confirm it displays correctly before suggesting it.
-- **Pair diagram with prose.** Always ensure the prose explanation still comes first and the diagram supplements it (not replaces it).
+- **Scan Section 7 as you draft it.** If it describes how pieces connect, a sequence of steps, or any relationship, plan a diagram to go with it.
+- **Include by default, skip deliberately.** Add at least one diagram whenever the concept is visual. Only omit it if the concept is trivial enough for a one-sentence explanation.
+- **Test the diagram.** Render it in markdown to confirm it displays correctly before publishing.
+- **Pair diagram with prose.** Keep the prose explanation first and let the diagram supplement it (not replace it).
 
-Diagrams are optional but powerful for complex concepts. Beginner labs especially benefit from a visual pipeline or architecture diagram.
+Beginner labs especially benefit from a visual pipeline or architecture diagram — if in doubt, include one.
 
 ## Amending the Constitution
 
