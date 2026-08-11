@@ -35,9 +35,11 @@ def code_cells():
 
 @pytest.fixture(scope="module")
 def lab():
-    """Exec the notebook's *definition* cells (Steps 2-5 and the trimmer
-    header) against real langchain-core classes. Invocation cells (which
-    would call the API) are excluded."""
+    """Exec the notebook's *definition* cells (Steps 2-5 and the optional
+    exercise) against real langchain-core classes. Invocation cells (which
+    would call the API) are excluded. The ada session is seeded with the
+    turns Step 6's API calls would produce, so the optional exercise has
+    real history to persist — no API calls are made."""
     os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
     namespace = {
         "os": os,
@@ -50,11 +52,17 @@ def lab():
         "AIMessage": AIMessage,
     }
     cells = code_cells()
-    definition_sources = cells[1:5] + [cells[9].split("bounded_chat.invoke(")[0]]
-    for source in definition_sources:
+    for source in cells[1:5]:
         tree = ast.parse(source)
         exec(compile(tree, "<cell>", "exec"), namespace)
-    return namespace
+    namespace["get_session_history"]("ada").add_messages([
+        HumanMessage("Hi, my name is Ada."),
+        AIMessage("Hi Ada! It's nice to meet you."),
+    ])
+    tree = ast.parse(cells[9])
+    exec(compile(tree, "<cell>", "exec"), namespace)
+    yield namespace
+    Path("ada_history.json").unlink(missing_ok=True)
 
 
 class TestPromptAndMemoryStore:
@@ -104,25 +112,20 @@ class TestStreaming:
         assert any("chat.stream(" in src for src in sources)
 
 
-class TestOptionalExerciseTrimmer:
-    """Section 11: trim_messages keeps only the most recent messages."""
+class TestOptionalExercisePersistence:
+    """Section 11: dumps/loads round-trips a session so history survives a restart."""
 
-    def test_trimmer_drops_oldest_messages(self, lab):
-        history = [
-            HumanMessage("My favorite city is Oslo. Remember it."),
-            AIMessage(
-                "Got it! I have noted that your favorite city is Oslo "
-                "and I will remember it."
-            ),
-            HumanMessage("I also love winter hiking."),
-            AIMessage("That sounds lovely. Winter hiking through the snow "
-                      "is really beautiful."),
-        ]
-        trimmed = lab["trimmer"].invoke(history)
-        assert len(trimmed) < len(history)
-        combined = " ".join(m.content for m in trimmed)
-        assert "Oslo" not in combined, "the oldest turn must fall out of the window"
-        assert "winter hiking" in combined, "the recent turn must be kept"
+    def test_ada_history_survives_restart(self, lab):
+        restored = lab["fresh_store"]["ada"].messages
+        assert len(restored) == 2
+        assert isinstance(restored[0], HumanMessage)
+        assert isinstance(restored[1], AIMessage)
+        assert "Ada" in restored[0].content
+
+    def test_restored_messages_match_original(self, lab):
+        original = lab["store"]["ada"].messages
+        restored = lab["fresh_store"]["ada"].messages
+        assert [m.content for m in restored] == [m.content for m in original]
 
 
 class TestNotebookArtifact:

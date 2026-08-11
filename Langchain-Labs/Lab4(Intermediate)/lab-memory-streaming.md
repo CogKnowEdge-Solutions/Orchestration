@@ -25,7 +25,8 @@ There is no dataset. The inputs are a handful of natural-language turns, small e
 - Two turns establishing a fact: *"Hi, my name is Ada."* followed by *"What is my name?"*
 - The same question sent through a *different* session, to prove memory is scoped.
 - A generation prompt: *"Write a short two-line poem about coffee."* (for streaming)
-- A three-turn conversation about a favorite city (for the optional exercise's bounded window)
+
+The optional exercise needs no new input — it reuses the `ada` session already stored in Step 6.
 
 That's the whole input — the lab is about *how* turns are stored and streamed, not about the data itself.
 
@@ -115,13 +116,15 @@ The exact *values* vary — free models change and their phrasing differs. What 
 
 - Python 3.11
 - `langchain==1.2.15`
-- `langchain-core==1.2.28` (provides `RunnableWithMessageHistory`, `InMemoryChatMessageHistory`, `trim_messages`)
+- `langchain-core==1.2.28` (provides `RunnableWithMessageHistory`, `InMemoryChatMessageHistory`, and the `dumps`/`loads` serializers)
 - `langchain-openai==1.1.12` (OpenRouter speaks the OpenAI protocol)
 - `python-dotenv==1.2.2` (loads `.env`)
 - `pydantic==2.13.4` (pulled in by the framework)
 - OpenRouter API — free models, no cost (see https://openrouter.ai/models); this lab uses `nvidia/nemotron-3-super-120b-a12b:free`
 
-No GPU needed. Runs on any laptop. The only cost is a free OpenRouter account for an API key. One note: every history turn you replay is extra tokens in each request — short conversations are effectively free on the free tier, but a long unbounded history grows every call (that's what the optional exercise addresses).
+No GPU needed. Runs on any laptop. The only cost is a free OpenRouter account for an API key. One note: every history turn you replay is extra tokens in each request — short conversations are effectively free on the free tier, but a long unbounded history grows every call.
+
+**Quota disclosure (PF-3):** OpenRouter's free tier allows **50 requests/day across all `:free` models** (20/minute), and failed requests count against it. A full run of this notebook makes **5 model calls**; the optional exercise makes **none**. If you hit a `429` error, either wait for the daily reset or add **$10 in credits once** — that raises the cap to 1,000 requests/day permanently (see https://openrouter.ai/docs/faq).
 
 ---
 
@@ -163,7 +166,11 @@ A normal call waits for the model to finish and returns one message. Streaming c
 
 ### The trade-off: memory costs tokens
 
-History is replayed on every call, so a long conversation becomes a long prompt: more latency, more tokens, and for paid models, more money. Production systems therefore cap the window — keep the last N messages, or trim by token count. The optional exercise implements the token-budget version with `trim_messages`.
+History is replayed on every call, so a long conversation becomes a long prompt: more latency, more tokens, and for paid models, more money. Production systems therefore cap the window — keep the last N messages, or trim by token count.
+
+### Memory is volatile unless you persist it
+
+The store this lab builds lives in RAM: a `dict` of `InMemoryChatMessageHistory` objects. The moment the kernel restarts — or the process exits — every session is gone. A real chat product can't afford that: users expect the bot to remember yesterday's conversation. The fix is to serialize history to durable storage and reload it on demand; the optional exercise does exactly that with `dumps`/`loads` and a JSON file, and it does so *without* calling the model, so it never touches your request quota.
 
 ---
 
@@ -214,7 +221,7 @@ The whole lab in one sentence: give a stateless chain a per-session memory, prov
 
 ### Step 1 — Install the required modules
 
-This first command installs the five Python libraries the lab needs, with exact versions pinned so the build is reproducible. The pieces this lab uses (`RunnableWithMessageHistory`, `InMemoryChatMessageHistory`, `trim_messages`) all ship inside `langchain-core`, so the install list is identical to Lab 3 — no new dependencies. Pinning exact versions (`==1.2.15`) means the lab behaves the same today and months from now (Article CQ-6). The `!` prefix is a Jupyter special that runs the rest of the cell as a terminal command.
+This first command installs the five Python libraries the lab needs, with exact versions pinned so the build is reproducible. The pieces this lab uses (`RunnableWithMessageHistory`, `InMemoryChatMessageHistory`, `dumps`/`loads`) all ship inside `langchain-core`, so the install list is identical to Lab 3 — no new dependencies. Pinning exact versions (`==1.2.15`) means the lab behaves the same today and months from now (Article CQ-6). The `!` prefix is a Jupyter special that runs the rest of the cell as a terminal command.
 
 When it finishes you should see `Successfully installed ...` (or `Requirement already satisfied` if you already ran the Section 9 setup — either is success).
 
@@ -369,7 +376,7 @@ Expect `Ada` to appear token by token. Compare this with Step 8: the stream is t
 
 ## 11. Optional Exercise
 
-Cap the memory window. History replayed on every call grows without bound, so add a **trimmer** that keeps only the most recent messages before the prompt sees them. Build a second chain like Steps 4–5 but with `RunnablePassthrough.assign(history=itemgetter("history") | trimmer)` inserted before `prompt` (and a `trim_messages` configured with a small `max_tokens` and a word-counting `token_counter`). Then hold three turns of conversation in a fresh session — state a fact, make a second remark, and ask about the fact — and confirm the model no longer recalls the very first turn, even though the store still holds it.
+Persist memory to disk. The `store` dict lives in RAM, so a kernel restart wipes every session — in production, memory must survive restarts. Swap the in-memory store for a file-backed one: serialize the `ada` session with `dumps` from `langchain_core.load`, write it to `ada_history.json`, reload it into a fresh store with `loads`, and confirm the restored session still holds Ada's turns. No model call is involved, so your request quota is untouched.
 
 ## 12. What We Learnt
 
@@ -379,6 +386,7 @@ Cap the memory window. History replayed on every call grows without bound, so ad
 - **Session IDs scope memory**: each `session_id` maps to its own history, so one chain can serve many independent conversations without leaking context.
 - **Streaming** yields `AIMessageChunk` tokens as they're generated; printing them as they arrive creates the responsive, live-typing feel of modern chat UIs.
 - **Streaming and memory compose** — you can stream through the same wrapped, session-aware chain.
-- **Memory costs tokens** — history is replayed every call, so production systems cap the window (as the optional exercise does with `trim_messages`).
+- **Memory costs tokens** — history is replayed every call, so a long conversation grows every request and production systems cap the window.
+- **Memory is volatile** — the in-memory store dies with the kernel, so real apps persist history to disk (as the optional exercise does with `dumps`/`loads`).
 
 Test yourself: complete the exercises in [`lab-memory-streaming-assignment.md`](lab-memory-streaming-assignment.md) — answer key included.

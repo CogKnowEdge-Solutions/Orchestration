@@ -20,7 +20,7 @@ Test what you learned in **Lab 4: Short-Term Memory & Streaming**. Try the exerc
 
 **7. (Applied)** In Step 9 the model streams the word "Ada" even though "Ada" appears nowhere in the current input `"In one word, what is my name?"`. Where does that word come from? *(See Section 10, Steps 6–9.)*
 
-**8. (Concept)** Why does an unbounded history become a problem as a conversation grows, and what does `trim_messages` in the optional exercise do about it? *(See Section 7 and Section 11.)*
+**8. (Concept)** The lab's memory store is a plain in-memory dict. What happens to every session's history when the kernel restarts, and what does the optional exercise do about it? *(See Section 7 and Section 11.)*
 
 **9. (Applied)** Predict the output: you run Step 6's two calls with `session_id="ada"`, then run `print(len(store["ada"].messages))`. What number prints, and why? *(See Section 10, Step 6.)*
 
@@ -42,6 +42,6 @@ Test what you learned in **Lab 4: Short-Term Memory & Streaming**. Try the exerc
 
 **7.** From the `ada` session's stored history, replayed into the prompt by `RunnableWithMessageHistory`. "Ada" was introduced in Step 6's first turn; by the time Step 9 streams, the wrapper has loaded that conversation and injected it, so the model can answer from context.
 
-**8.** Every call replays the entire history as prompt tokens, so a long conversation means a longer prompt: more latency, more tokens, and more cost on paid models. `trim_messages` caps the window — it keeps only the most recent messages within a token/word budget, so older turns fall out of what the model sees (even though the store still holds them).
+**8.** The store lives in RAM, so a kernel restart erases every session's `InMemoryChatMessageHistory` — the model would greet each conversation as a stranger again. The optional exercise fixes that by serializing the `ada` session with `dumps`, writing it to `ada_history.json`, and restoring it into a fresh store with `loads`, so the history survives a restart. It does this with no model calls, so it doesn't consume your request quota.
 
 **9.** `4`. Two turns produce four stored messages — each turn adds one `HumanMessage` (the input) and one `AIMessage` (the reply) — and Step 6's print confirms exactly `History stored for 'ada': 4 messages`.
