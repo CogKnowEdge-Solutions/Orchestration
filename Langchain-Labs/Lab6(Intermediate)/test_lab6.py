@@ -155,6 +155,19 @@ class TestToolAllowlist:
         middleware.wrap_model_call(request, handler)
         assert seen["names"] == ["get_balance", "transfer_money"]
 
+    def test_readonly_prompt_never_names_the_hidden_tool(self, lab):
+        prompt = lab["READONLY_PROMPT"]
+        assert "get_balance" in prompt
+        assert "transfer_money" not in prompt  # naming it would re-enable it
+
+    def test_readonly_agent_uses_readonly_prompt(self):
+        step7 = next(
+            c
+            for c in code_cells()
+            if "readonly_agent = create_agent" in c and "ToolAllowlist" in c
+        )
+        assert "system_prompt=READONLY_PROMPT" in step7
+
 
 class TestHITLAgent:
     """Steps 8-11: the HITL agent pauses on transfer_money and resumes with decisions."""
@@ -179,18 +192,52 @@ class TestHITLAgent:
         sources = code_cells()
         resumes = [s for s in sources if "Command(resume={" in s]
         assert len(resumes) == 3, "one resume cell per decision (approve, edit, reject)"
-        assert all('"decisions": [{' in s for s in resumes), (
+        assert all('"decisions": [' in s for s in resumes), (
             "resume value is {'decisions': [...]}, not a bare list"
         )
 
-    def test_edit_payload_replaces_action_wholesale(self, lab):
+    def test_resume_decisions_come_from_interactive_prompt(self):
         sources = code_cells()
-        edit_cell = [s for s in sources if "edited_transfer" in s and "Command(resume={" in s]
-        assert edit_cell, "edit resume references an edited action"
-        assert '{"type": "edit", "edited_action": edited_transfer}' in edit_cell[0]
-        edited = lab["edited_transfer"]
-        assert edited["name"] == "transfer_money"
-        assert edited["args"]["amount"] == 50.0
+        resumes = [s for s in sources if "Command(resume={" in s]
+        assert all("ask_human()" in s for s in resumes), (
+            "the decision is chosen at the terminal, not hardcoded in the cell"
+        )
+        assert not any(
+            '"type": "approve"}' in s or '"type": "reject"' in s for s in resumes
+        ), "no hardcoded decision payloads remain in the resume cells"
+
+
+class TestHumanPrompt:
+    """Steps 9-11: ask_human() reads the decision from the terminal (mocked here)."""
+
+    def test_approve_returns_approve(self, lab, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda *a: "approve")
+        assert lab["ask_human"]() == {"type": "approve"}
+
+    def test_edit_builds_full_action_with_edited_amount(self, lab, monkeypatch):
+        answers = iter(["edit", "50"])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        payload = lab["ask_human"]()
+        assert payload["type"] == "edit"
+        action = payload["edited_action"]
+        assert action["name"] == "transfer_money"
+        assert action["args"] == {
+            "from_account": "account-1",
+            "to_account": "account-2",
+            "amount": 50.0,
+        }
+
+    def test_reject_carries_the_human_reason(self, lab, monkeypatch):
+        answers = iter(["reject", "Over limit."])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        assert lab["ask_human"]() == {"type": "reject", "message": "Over limit."}
+
+    def test_falls_back_to_approve_when_no_terminal(self, lab, monkeypatch):
+        def no_stdin(*a, **k):
+            raise NotImplementedError
+
+        monkeypatch.setattr("builtins.input", no_stdin)
+        assert lab["ask_human"]() == {"type": "approve"}
 
 
 class TestOptionalExerciseComposition:
