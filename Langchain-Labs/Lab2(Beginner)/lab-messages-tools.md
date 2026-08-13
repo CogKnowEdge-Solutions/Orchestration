@@ -16,7 +16,7 @@ A **message** is a single piece of data in a conversation. Every message has two
 - **`content`** — the actual text.
 
 ```mermaid
-graph LR
+graph TD
     S["SYSTEM MESSAGE<br/>sets the rules:<br/>'You are a math helper.'"]
     H["HUMAN MESSAGE<br/>your words:<br/>'What is 8 + 7?'"]
     A["AI MESSAGE<br/>the model's words:<br/>'I'll compute that.'"]

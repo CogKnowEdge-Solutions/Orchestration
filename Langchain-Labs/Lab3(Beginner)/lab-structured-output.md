@@ -53,7 +53,7 @@ The lab moves from "the problem" to "the fix," then to a realistic pipeline:
 Here's the whole lab as a flow:
 
 ```mermaid
-graph LR
+graph TD
     M["1. Create the model"]
     P["2. See the problem<br/>free-form text"]
     S["3. Define a schema<br/>Movie (Pydantic)"]

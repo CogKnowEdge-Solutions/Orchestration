@@ -118,10 +118,10 @@ graph LR
     P --> S
     S -->|"reads & writes"| F
 
-    style N fill:#e1f5ff
-    style A fill:#e1f5ff
-    style S fill:#c8e6c9
-    style F fill:#fff9c4
+    style N fill:#e1f5ff,color:#1a1a1a
+    style A fill:#e1f5ff,color:#1a1a1a
+    style S fill:#c8e6c9,color:#1a1a1a
+    style F fill:#fff9c4,color:#1a1a1a
 ```
 
 The protocol is language-neutral: any server that speaks MCP, in any language, hands tools to this client the same way.

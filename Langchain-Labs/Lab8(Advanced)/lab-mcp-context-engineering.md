@@ -129,9 +129,9 @@ graph LR
     OWN -->|"3 tools, descriptions you author"| MC
     MC --> CTX --> AG
 
-    style EXT fill:#ffe0b2
-    style OWN fill:#c8e6c9
-    style CTX fill:#fff9c4
+    style EXT fill:#ffe0b2,color:#1a1a1a
+    style OWN fill:#c8e6c9,color:#1a1a1a
+    style CTX fill:#fff9c4,color:#1a1a1a
 ```
 
 ### Three levers, and who gets to pull each one

@@ -56,9 +56,9 @@ graph LR
     T["7. Stream tokens<br/>chunk by chunk"]
     TM["8. Stream with memory"]
     M --> P --> S --> W --> C --> I --> T --> TM
-    style W fill:#ffe0b2
-    style C fill:#c8e6c9
-    style T fill:#e1f5ff
+    style W fill:#ffe0b2,color:#1a1a1a
+    style C fill:#c8e6c9,color:#1a1a1a
+    style T fill:#e1f5ff,color:#1a1a1a
 ```
 
 Steps 4 and 7 are the pivots: Step 4 turns a stateless chain into a session-aware one; Step 7 turns a one-shot reply into a live stream.

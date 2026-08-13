@@ -25,7 +25,7 @@ An **agent** is a model wrapped in a framework that gives it hands. Two extra pi
 - **A loop** — machinery that lets the model *request* a tool call, runs the tool for real, and feeds the result back until the model can give a final answer.
 
 ```mermaid
-graph LR
+graph TD
     M["A MODEL<br/>talks a lot,<br/>does nothing"]
     AG["AN AGENT<br/>model + tools + loop<br/>actually does things"]
     M -->|"add tools<br/>and a loop"| AG

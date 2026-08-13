@@ -56,12 +56,12 @@ graph LR
     T["6. Custom wrap<br/>timing"]
     D["7. Custom decorator<br/>hooks"]
     M --> A --> P --> L --> C --> T --> D
-    style M fill:#e1f5ff
-    style P fill:#c8e6c9
-    style L fill:#c8e6c9
-    style C fill:#ffe0b2
-    style T fill:#ffe0b2
-    style D fill:#ffe0b2
+    style M fill:#e1f5ff,color:#1a1a1a
+    style P fill:#c8e6c9,color:#1a1a1a
+    style L fill:#c8e6c9,color:#1a1a1a
+    style C fill:#ffe0b2,color:#1a1a1a
+    style T fill:#ffe0b2,color:#1a1a1a
+    style D fill:#ffe0b2,color:#1a1a1a
 ```
 
 Steps 3–4 are the prebuilt half, Steps 5–7 the custom half; the pivot is Step 2, where the loop becomes visible as a surface you can attach layers to.

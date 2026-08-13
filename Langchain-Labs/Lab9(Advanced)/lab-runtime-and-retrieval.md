@@ -137,8 +137,8 @@ graph LR
 
     Q --> TOK --> BM --> R --> TOOL
     TOOL --> AG
-    style BM fill:#fff9c4
-    style AG fill:#c8e6c9
+    style BM fill:#fff9c4,color:#1a1a1a
+    style AG fill:#c8e6c9,color:#1a1a1a
 ```
 
 The trade-off worth naming for an Advanced audience: BM25 is keyword-based — it will miss a question that shares no words with its answer. Semantic (vector) retrieval fixes that at the cost of an embedding model and an index. The lab implements BM25 because it makes the scoring *visible* in a notebook cell; swapping it for a vector store changes the retriever, not the agent — that is the design insight to take away.

@@ -45,7 +45,7 @@ The build proceeds from "no controls" outward, adding one control at a time:
 9. **Decision: reject** — the human refuses and the model recovers with the reason.
 
 ```mermaid
-graph LR
+graph TD
     M["1. Create the model"]
     T["2. Tools: safe read<br/>+ risky transfer"]
     B["3. Baseline agent<br/>no controls (the problem)"]
@@ -58,10 +58,10 @@ graph LR
     M --> T --> B --> G1 --> G2 --> H --> D1
     H --> D2
     H --> D3
-    style B fill:#ffcdd2
-    style G1 fill:#c8e6c9
-    style G2 fill:#c8e6c9
-    style H fill:#ffe0b2
+    style B fill:#ffcdd2,color:#1a1a1a
+    style G1 fill:#c8e6c9,color:#1a1a1a
+    style G2 fill:#c8e6c9,color:#1a1a1a
+    style H fill:#ffe0b2,color:#1a1a1a
 ```
 
 Steps 3–5 are the automatic half (guardrails); Steps 6–9 the human half (HITL). The pivot is Step 6, where the run stops being one continuous action and becomes a two-phase conversation with a person.
@@ -173,10 +173,10 @@ graph LR
     H -->|"approve / edit"| T
     H -->|"reject"| M
 
-    style G1 fill:#ffcdd2
-    style G2 fill:#ffcdd2
-    style H fill:#ffe0b2
-    style T fill:#c8e6c9
+    style G1 fill:#ffcdd2,color:#1a1a1a
+    style G2 fill:#ffcdd2,color:#1a1a1a
+    style H fill:#ffe0b2,color:#1a1a1a
+    style T fill:#c8e6c9,color:#1a1a1a
 ```
 
 The input guardrail sits *before* the model (bad input never reaches it). The capability guardrail sits between the model and its tools (the model can't even propose a hidden tool). The HITL gate sits *immediately before* the tool node (the most dangerous tool runs only after a person decides). Each layer narrows what can happen before it happens.
