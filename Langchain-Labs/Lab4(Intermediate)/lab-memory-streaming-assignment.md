@@ -14,15 +14,15 @@ Test what you learned in **Lab 4: Short-Term Memory & Streaming**. Try the exerc
 
 **4. (Concept)** Two users both call the same `chat` object. What keeps user A's facts from leaking into user B's conversation? *(See Sections 7 and 10, Step 7.)*
 
-**5. (Code)** Given `store = {}` and the callback `return store.setdefault(session_id, InMemoryChatMessageHistory())`, what does the call `get_session_history("ada")` return the *first* time, and what does a *second* call return? *(See Section 10, Step 4.)*
+**5. (Code)** Given `store = {}` and the callback `return store.setdefault(session_id, InMemoryChatMessageHistory())`, what does the call `get_session_history("cog")` return the *first* time, and what does a *second* call return? *(See Section 10, Step 4.)*
 
 **6. (Concept)** What is an `AIMessageChunk`, and why do `end=""` and `flush=True` in the print produce a "typing" effect? *(See Sections 7 and 10, Step 8.)*
 
-**7. (Applied)** In Step 9 the model streams the word "Ada" even though "Ada" appears nowhere in the current input `"In one word, what is my name?"`. Where does that word come from? *(See Section 10, Steps 6–9.)*
+**7. (Applied)** In Step 9 the model streams the word "Cog" even though "Cog" appears nowhere in the current input `"In one word, what is my name?"`. Where does that word come from? *(See Section 10, Steps 6–9.)*
 
 **8. (Concept)** The lab's memory store is a plain in-memory dict. What happens to every session's history when the kernel restarts, and what does the optional exercise do about it? *(See Section 7 and Section 11.)*
 
-**9. (Applied)** Predict the output: you run Step 6's two calls with `session_id="ada"`, then run `print(len(store["ada"].messages))`. What number prints, and why? *(See Section 10, Step 6.)*
+**9. (Applied)** Predict the output: you run Step 6's two calls with `session_id="cog"`, then run `print(len(store["cog"].messages))`. What number prints, and why? *(See Section 10, Step 6.)*
 
 ---
 
@@ -40,8 +40,8 @@ Test what you learned in **Lab 4: Short-Term Memory & Streaming**. Try the exerc
 
 **6.** An `AIMessageChunk` is a piece of the response carrying the tokens generated since the previous chunk, yielded one at a time by `model.stream()`. Printing each chunk's `.content` with `end=""` keeps everything on one line, and `flush=True` pushes each chunk to the display immediately instead of buffering — together they render text as it arrives, which looks like live typing.
 
-**7.** From the `ada` session's stored history, replayed into the prompt by `RunnableWithMessageHistory`. "Ada" was introduced in Step 6's first turn; by the time Step 9 streams, the wrapper has loaded that conversation and injected it, so the model can answer from context.
+**7.** From the `cog` session's stored history, replayed into the prompt by `RunnableWithMessageHistory`. "Cog" was introduced in Step 6's first turn; by the time Step 9 streams, the wrapper has loaded that conversation and injected it, so the model can answer from context.
 
-**8.** The store lives in RAM, so a kernel restart erases every session's `InMemoryChatMessageHistory` — the model would greet each conversation as a stranger again. The optional exercise fixes that by serializing the `ada` session with `dumps`, writing it to `ada_history.json`, and restoring it into a fresh store with `loads`, so the history survives a restart. It does this with no model calls, so it doesn't consume your request quota.
+**8.** The store lives in RAM, so a kernel restart erases every session's `InMemoryChatMessageHistory` — the model would greet each conversation as a stranger again. The optional exercise fixes that by serializing the `cog` session with `dumps`, writing it to `cog_history.json`, and restoring it into a fresh store with `loads`, so the history survives a restart. It does this with no model calls, so it doesn't consume your request quota.
 
-**9.** `4`. Two turns produce four stored messages — each turn adds one `HumanMessage` (the input) and one `AIMessage` (the reply) — and Step 6's print confirms exactly `History stored for 'ada': 4 messages`.
+**9.** `4`. Two turns produce four stored messages — each turn adds one `HumanMessage` (the input) and one `AIMessage` (the reply) — and Step 6's print confirms exactly `History stored for 'cog': 4 messages`.

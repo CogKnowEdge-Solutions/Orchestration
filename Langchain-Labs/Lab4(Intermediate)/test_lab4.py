@@ -37,7 +37,7 @@ def code_cells():
 def lab():
     """Exec the notebook's *definition* cells (Steps 2-5 and the optional
     exercise) against real langchain-core classes. Invocation cells (which
-    would call the API) are excluded. The ada session is seeded with the
+    would call the API) are excluded. The cog session is seeded with the
     turns Step 6's API calls would produce, so the optional exercise has
     real history to persist — no API calls are made."""
     os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
@@ -55,14 +55,14 @@ def lab():
     for source in cells[1:5]:
         tree = ast.parse(source)
         exec(compile(tree, "<cell>", "exec"), namespace)
-    namespace["get_session_history"]("ada").add_messages([
-        HumanMessage("Hi, my name is Ada."),
-        AIMessage("Hi Ada! It's nice to meet you."),
+    namespace["get_session_history"]("cog").add_messages([
+        HumanMessage("Hi, my name is Cog."),
+        AIMessage("Hi Cog! It's nice to meet you."),
     ])
     tree = ast.parse(cells[9])
     exec(compile(tree, "<cell>", "exec"), namespace)
     yield namespace
-    Path("ada_history.json").unlink(missing_ok=True)
+    Path("cog_history.json").unlink(missing_ok=True)
 
 
 class TestPromptAndMemoryStore:
@@ -81,8 +81,8 @@ class TestPromptAndMemoryStore:
         assert HumanMessagePromptTemplate in kinds
 
     def test_store_returns_same_history_per_session(self, lab):
-        first = lab["get_session_history"]("ada")
-        second = lab["get_session_history"]("ada")
+        first = lab["get_session_history"]("cog")
+        second = lab["get_session_history"]("cog")
         other = lab["get_session_history"]("bob")
         assert first is second
         assert first is not other
@@ -115,16 +115,16 @@ class TestStreaming:
 class TestOptionalExercisePersistence:
     """Section 11: dumps/loads round-trips a session so history survives a restart."""
 
-    def test_ada_history_survives_restart(self, lab):
-        restored = lab["fresh_store"]["ada"].messages
+    def test_cog_history_survives_restart(self, lab):
+        restored = lab["fresh_store"]["cog"].messages
         assert len(restored) == 2
         assert isinstance(restored[0], HumanMessage)
         assert isinstance(restored[1], AIMessage)
-        assert "Ada" in restored[0].content
+        assert "Cog" in restored[0].content
 
     def test_restored_messages_match_original(self, lab):
-        original = lab["store"]["ada"].messages
-        restored = lab["fresh_store"]["ada"].messages
+        original = lab["store"]["cog"].messages
+        restored = lab["fresh_store"]["cog"].messages
         assert [m.content for m in restored] == [m.content for m in original]
 
 

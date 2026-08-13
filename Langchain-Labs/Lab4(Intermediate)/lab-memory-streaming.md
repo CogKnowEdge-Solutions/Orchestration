@@ -6,7 +6,7 @@
 
 ## 1. Short-Term Memory & Streaming
 
-A base chat model has two gaps your application must fill. First, **statelessness**: every call is independent, so a model just told "my name is Ada" answers the next question as if it never heard it. Second, **latency**: waiting for a complete answer before showing anything makes even a fast model feel slow.
+A base chat model has two gaps your application must fill. First, **statelessness**: every call is independent, so a model just told "my name is Cog" answers the next question as if it never heard it. Second, **latency**: waiting for a complete answer before showing anything makes even a fast model feel slow.
 
 This lab closes both. **Short-term memory** means *your program* keeps the conversation and replays it into each new request, so the model answers with the context of everything said before. **Streaming** means the model's tokens arrive one chunk at a time and are displayed as they arrive — the typewriter effect behind modern chat UIs. You will build a session-aware chat chain with `RunnableWithMessageHistory`, watch memory stay per-session, then stream responses both with and without memory.
 
@@ -22,11 +22,11 @@ Think of a customer-support bot or an assistant inside a product. Users expect i
 
 There is no dataset. The inputs are a handful of natural-language turns, small enough to read by eye (Article PF-4):
 
-- Two turns establishing a fact: *"Hi, my name is Ada."* followed by *"What is my name?"*
+- Two turns establishing a fact: *"Hi, my name is Cog."* followed by *"What is my name?"*
 - The same question sent through a *different* session, to prove memory is scoped.
 - A generation prompt: *"Write a short two-line poem about coffee."* (for streaming)
 
-The optional exercise needs no new input — it reuses the `ada` session already stored in Step 6.
+The optional exercise needs no new input — it reuses the `cog` session already stored in Step 6.
 
 That's the whole input — the lab is about *how* turns are stored and streamed, not about the data itself.
 
@@ -72,25 +72,25 @@ When the notebook works, each cell prints what it produces. On a real run it loo
 Step 6 — memory across turns. The model answers "What is my name?" from the earlier turn, and the last line shows the store has grown to four messages (two turns × question + answer):
 
 ```
-Hi Ada! It's nice to meet you. How's your day going? ...
-Your name is Ada! You told me that when you first said, "Hi, my name is Ada." ...
-History stored for 'ada': 4 messages
+Hi Cog! It's nice to meet you. How's your day going? ...
+Your name is Cog! You told me that when you first said, "Hi, my name is Cog." ...
+History stored for 'cog': 4 messages
 ```
 
-Step 7 — session isolation. The same question through a new session gets nothing, and the store confirms both conversations exist side by side — plus a dump of what `ada` actually remembered, message by message:
+Step 7 — session isolation. The same question through a new session gets nothing, and the store confirms both conversations exist side by side — plus a dump of what `cog` actually remembered, message by message:
 
 ```
 I don't have access to personal information like your name unless you've shared
 it with me in this conversation. Since this is a new chat and you haven't told me
 your name, I don't know what it is.
 ...
-Sessions in the store: ['ada', 'new-user']
+Sessions in the store: ['cog', 'new-user']
 
-What the ada session remembered:
-  HumanMessage: Hi, my name is Ada.
-  AIMessage: Hi Ada! It's nice to meet you...
+What the cog session remembered:
+  HumanMessage: Hi, my name is Cog.
+  AIMessage: Hi Cog! It's nice to meet you...
   HumanMessage: What is my name?
-  AIMessage: Your name is Ada! ...
+  AIMessage: Your name is Cog! ...
 ```
 
 Step 8 — streaming. The poem appears token by token, and the final line makes the mechanism explicit:
@@ -102,13 +102,13 @@ Awakening thoughts with each bitter sip.
 Streamed in 60 chunks; first chunk type: AIMessageChunk
 ```
 
-Step 9 — streaming with memory. The wrapped chain streams a one-word answer taken from the `ada` session's history:
+Step 9 — streaming with memory. The wrapped chain streams a one-word answer taken from the `cog` session's history:
 
 ```
-Ada
+Cog
 ```
 
-The exact *values* vary — free models change and their phrasing differs. What must be true: **Step 6's model answers "Ada" from context, Step 7's new-session model doesn't, Step 8 prints the poem a chunk at a time and reports `AIMessageChunk`, and Step 9 streams an answer that only the remembered session could give.** If you see that, both concepts are working.
+The exact *values* vary — free models change and their phrasing differs. What must be true: **Step 6's model answers "Cog" from context, Step 7's new-session model doesn't, Step 8 prints the poem a chunk at a time and reports `AIMessageChunk`, and Step 9 streams an answer that only the remembered session could give.** If you see that, both concepts are working.
 
 ---
 
@@ -145,10 +145,10 @@ sequenceDiagram
     participant Store
     participant M as Model
 
-    You->>W: invoke({"input": "My name is Ada."}, session_id="ada")
-    W->>Store: load history for "ada"
+    You->>W: invoke({"input": "My name is Cog."}, session_id="cog")
+    W->>Store: load history for "cog"
     Store-->>W: [] (first turn)
-    W->>M: system + history + "My name is Ada."
+    W->>M: system + history + "My name is Cog."
     M-->>W: reply
     W->>Store: append user turn + reply
     W-->>You: reply
@@ -299,29 +299,29 @@ chat = RunnableWithMessageHistory(
 
 ### Step 6 — Chat across turns (memory works)
 
-Both calls pass `session_id="ada"`, so they share one history. The first turn states a fact; the second asks about it. Because the wrapper replayed the first exchange into the prompt, the model answers from context. The final `print` shows the store growing — four messages after two turns — making the mechanics visible rather than magical.
+Both calls pass `session_id="cog"`, so they share one history. The first turn states a fact; the second asks about it. Because the wrapper replayed the first exchange into the prompt, the model answers from context. The final `print` shows the store growing — four messages after two turns — making the mechanics visible rather than magical.
 
 ```python
 response = chat.invoke(
-    {"input": "Hi, my name is Ada."},
-    config={"configurable": {"session_id": "ada"}},
+    {"input": "Hi, my name is Cog."},
+    config={"configurable": {"session_id": "cog"}},
 )
 print(response.content)
 
 response = chat.invoke(
     {"input": "What is my name?"},
-    config={"configurable": {"session_id": "ada"}},
+    config={"configurable": {"session_id": "cog"}},
 )
 print(response.content)
 
-print(f"History stored for 'ada': {len(store['ada'].messages)} messages")
+print(f"History stored for 'cog': {len(store['cog'].messages)} messages")
 ```
 
-Expect the model to greet Ada, then answer "Your name is Ada!" from the first turn, then print `History stored for 'ada': 4 messages`.
+Expect the model to greet Cog, then answer "Your name is Cog!" from the first turn, then print `History stored for 'cog': 4 messages`.
 
 ### Step 7 — Each session has its own memory
 
-Now send the identical question through a different `session_id`. The wrapper loads that session's history — an empty one — so the model has no idea about Ada. The second print shows both conversations stored side by side, and the loop dumps `ada`'s stored messages to show exactly what memory means here: a list of `HumanMessage`/`AIMessage` objects. This is the per-conversation scoping that lets one chain serve many users without leaking context between them.
+Now send the identical question through a different `session_id`. The wrapper loads that session's history — an empty one — so the model has no idea about Cog. The second print shows both conversations stored side by side, and the loop dumps `cog`'s stored messages to show exactly what memory means here: a list of `HumanMessage`/`AIMessage` objects. This is the per-conversation scoping that lets one chain serve many users without leaking context between them.
 
 ```python
 response = chat.invoke(
@@ -332,12 +332,12 @@ print(response.content)
 
 print(f"\nSessions in the store: {sorted(store.keys())}")
 
-print("\nWhat the ada session remembered:")
-for message in store["ada"].messages:
+print("\nWhat the cog session remembered:")
+for message in store["cog"].messages:
     print(f"  {type(message).__name__}: {message.content[:60]}")
 ```
 
-Expect the model to say it doesn't know your name (new session), `Sessions in the store: ['ada', 'new-user']`, then the four-message dump of what `ada` retained.
+Expect the model to say it doesn't know your name (new session), `Sessions in the store: ['cog', 'new-user']`, then the four-message dump of what `cog` retained.
 
 ### Step 8 — Stream a response token by token
 
@@ -359,24 +359,24 @@ Expect the poem to fill in live, then a line like `Streamed in 60 chunks; first 
 
 ### Step 9 — Stream with memory
 
-Streaming and memory compose: we stream through the *wrapped* `chat` object, still passing the `ada` session that already knows the name. The question is answered from history — but the tokens arrive as a stream, exactly as a production chat UI would render them.
+Streaming and memory compose: we stream through the *wrapped* `chat` object, still passing the `cog` session that already knows the name. The question is answered from history — but the tokens arrive as a stream, exactly as a production chat UI would render them.
 
 ```python
 for chunk in chat.stream(
     {"input": "In one word, what is my name?"},
-    config={"configurable": {"session_id": "ada"}},
+    config={"configurable": {"session_id": "cog"}},
 ):
     print(chunk.content, end="", flush=True)
 print()
 ```
 
-Expect `Ada` to appear token by token. Compare this with Step 8: the stream is the same mechanism, but the content depends on the session's remembered context.
+Expect `Cog` to appear token by token. Compare this with Step 8: the stream is the same mechanism, but the content depends on the session's remembered context.
 
 ---
 
 ## 11. Optional Exercise
 
-Persist memory to disk. The `store` dict lives in RAM, so a kernel restart wipes every session — in production, memory must survive restarts. Swap the in-memory store for a file-backed one: serialize the `ada` session with `dumps` from `langchain_core.load`, write it to `ada_history.json`, reload it into a fresh store with `loads`, and confirm the restored session still holds Ada's turns. No model call is involved, so your request quota is untouched.
+Persist memory to disk. The `store` dict lives in RAM, so a kernel restart wipes every session — in production, memory must survive restarts. Swap the in-memory store for a file-backed one: serialize the `cog` session with `dumps` from `langchain_core.load`, write it to `cog_history.json`, reload it into a fresh store with `loads`, and confirm the restored session still holds Cog's turns. No model call is involved, so your request quota is untouched.
 
 ## 12. What We Learnt
 
