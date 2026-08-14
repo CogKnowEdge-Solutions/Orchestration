@@ -6,7 +6,19 @@
 
 ## 1. Local MCP — Connect to a Locally-Run MCP Server
 
-Every agent so far learned its tools the same way: tools were *written into the notebook* as Python functions. **MCP** (Model Context Protocol) changes who owns the tools. With MCP, capabilities live in a separate program — an **MCP server** — and your agent connects to it over a standard protocol and picks up whatever tools that server exposes. This lab covers the **local variant** of MCP: a small server running on your own machine, connected over stdio (standard input/output). It is the easier, lower-stakes half of MCP — no hosted services, no network, no auth — just a subprocess on your machine that your agent can call. You'll run a personal notes server, watch its four tools become ordinary LangChain tools, and drive them with the same free Nemotron model used all along.
+### What is MCP?
+
+- Every agent so far learned its tools the same way: tools were *written into the notebook* as Python functions. **MCP** (Model Context Protocol) changes who owns the tools.
+- With MCP, capabilities live in a separate program — an **MCP server** — and your agent connects to it over a standard protocol and picks up whatever tools that server exposes.
+- This lab covers the **local variant** of MCP: a small server running on your own machine, connected over stdio (standard input/output).
+- It is the easier, lower-stakes half of MCP — no hosted services, no network, no auth — just a subprocess on your machine that your agent can call.
+- You'll run a personal notes server, watch its four tools become ordinary LangChain tools, and drive them with the same free Nemotron model used all along.
+
+### How MCP works in this lab
+
+![How local MCP works in this lab](sources/lab7-mcp-flow.png)
+
+Your notebook is the **client** (`MultiServerMCPClient`). It spawns `mcp_notes_server.py` (the **server**) as a subprocess, the two processes talk over **stdio** using JSON-RPC messages (`initialize`, `ListTools`, `CallTool`), and the server hands its four tools (`add_note`, `list_notes`, `get_note`, `delete_note`) to the agent, which reads and writes `notes.json`.
 
 ---
 
