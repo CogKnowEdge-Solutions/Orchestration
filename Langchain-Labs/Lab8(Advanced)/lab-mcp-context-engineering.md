@@ -189,15 +189,50 @@ The first notebook cell repeats the `pip install` in one line (pinned versions),
 
 ## 10. Step-wise Development Instructions
 
-The notebook has 12 code cells. Work through them in order; the last cell shuts the server down.
+The notebook has 12 code cells; the code below is what each cell runs. Work through them in order; the last cell shuts the server down.
 
 **Step 1 — Install everything (one cell).** The first code cell is the single pinned `!pip install` line. Run it once and everything in Section 9 is in place.
+
+```python
+# One command installs all required modules (versions pinned for reproducibility).
+!pip install -qU langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 langgraph==1.2.11 langchain-mcp-adapters==0.3.2 mcp==1.29.0 python-dotenv==1.2.2
+```
 
 **Step 2 — Imports, the key, and a measuring tool.** Load `.env`, build the model factory (same free Nemotron model as Labs 5–7), and define a tiny `BaseCallbackHandler`. The callback is the lab's instrument: LangChain calls `on_llm_end` after every LLM call, and the provider reports `token_usage.prompt_tokens` — the number of input tokens that request carried. This is how you *see* the context budget instead of guessing at it:
 
 ```python
+import asyncio
+import os
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from dotenv import load_dotenv
+from langchain.agents import create_agent
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_openai import ChatOpenAI
+
+load_dotenv()
+
+
+def model():
+    return ChatOpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ["OPENROUTER_API_KEY"],
+        model="nvidia/nemotron-3-super-120b-a12b:free",
+        temperature=0,
+    )
+
+
 class UsageCapture(BaseCallbackHandler):
-    def __init__(self): self.calls = []
+    """Records prompt_tokens for every LLM call in a run."""
+
+    def __init__(self):
+        self.calls = []
+
     def on_llm_end(self, response, **kwargs):
         usage = (response.llm_output or {}).get("token_usage", {})
         self.calls.append(usage.get("prompt_tokens", 0))
@@ -207,6 +242,36 @@ class UsageCapture(BaseCallbackHandler):
 
 **Step 3 — Host your own server.** Start `mcp_ops_server.py` as a background subprocess. It binds `127.0.0.1:8788` and speaks Streamable HTTP. The cell is defensive on purpose: it first checks whether the port already answers, and only spawns a new process if nothing is listening — so re-running the notebook never stacks orphaned servers. A short `socket.create_connection` retry loop waits until the port accepts connections before moving on.
 
+```python
+PORT = 8788
+BASE = f"http://127.0.0.1:{PORT}/mcp"
+
+
+def port_up(port, timeout=20):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=1)
+            sock.close()
+            return True
+        except OSError:
+            time.sleep(0.3)
+    return False
+
+
+server = None
+if not port_up(PORT, timeout=1):
+    logfile = open("mcp_ops_server.log", "w")
+    server = subprocess.Popen(
+        [sys.executable, str(Path("mcp_ops_server.py").resolve()), str(PORT)],
+        stdout=subprocess.DEVNULL,
+        stderr=logfile,
+    )
+
+print("server ready:", port_up(PORT))
+print("endpoint:", BASE)
+```
+
 **Step 4 — Connect two remote servers.** One `MultiServerMCPClient`, two entries, both `"transport": "http"`. This is the entire "remote" trick — notice how little changed from Lab 7:
 
 ```python
@@ -215,19 +280,91 @@ client = MultiServerMCPClient({
     "ops":      {"transport": "http", "url": "http://127.0.0.1:8788/mcp"},
 })
 tools = await client.get_tools()
+
+external = [t for t in tools if t.name.startswith(("get_", "list_"))]
+local = [t for t in tools if t.name.startswith("digest_")]
+print("external tools:", [t.name for t in external])
+print("local tools:   ", [t.name for t in local])
 ```
 
 Print the discovered tool names. The external server's names (`get_funding_rates`, ...) and payload shapes are someone else's design; your own (`digest_logs`, ...) are yours.
 
 **Step 5 — Take the context ledger.** Before calling the model, serialize the *fixed cost*. For every external tool, print `len(str(tool.args))` — the character size of its JSON schema — and total it. Do the same for your server's tools. This is the number that gets paid on every request, used or not. (For the model this maps roughly to one token per 4 chars of schema.) Expect the full external set to be well over 1,000 characters of schema, and several of Coinfuty's tools to be 300–570 characters on their own.
 
-**Step 6 — A/B 1: prune the external tools.** Same question — *"What is the current funding rate and open interest for BTC futures?"* — asked twice, once with all 7 external tools bound and once with only the 2 that the question needs (`get_funding_rates`, `get_coin_summary`). Capture input tokens with the callback each time and print `capture.calls[0]` — the first LLM call's tokens, i.e. the decision-time context. Both answers should be correct and structurally identical.
+```python
+ext_total = 0
+for t in external:
+    print(f"  {t.name}: schema {len(str(t.args))} chars")
+    ext_total += len(str(t.args))
+print("EXTERNAL schema total:", ext_total, "chars -> paid on every call while bound")
+print()
+for t in local:
+    print(f"  {t.name}: schema {len(str(t.args))} chars | description {len(t.description or '')} chars")
+```
 
-**Step 7 — A/B 2: shape the results on your own server.** Same treatment with a log question — *"Read the recent logs for BTC and summarize what happened."* — run once with only `digest_logs` (the raw firehose, default 300 lines ≈ 14 KB) and once with only `digest_highlights` (the same events compressed server-side to ~160 chars). Print the result sizes and the callback's token sequence. The number to stare at is the **second** call: how much context the tool result dragged into the model.
+**Step 6 — A/B 1: prune the external tools.** Same question — *"What is the current funding rate and open interest for BTC futures?"* — asked twice, once with all 7 external tools bound and once with only the 2 that the question needs (`get_funding_rates`, `get_coin_summary`). `run_with_usage` runs an agent and returns the per-call input tokens; `calls[0]` is the decision-time context. Both answers should be correct and structurally identical.
+
+```python
+async def run_with_usage(agent, question):
+    capture = UsageCapture()
+    result = await agent.ainvoke(
+        {"messages": [("human", question)]}, config={"callbacks": [capture]}
+    )
+    return capture.calls, str(result["messages"][-1].content)
+
+
+Q1 = "What is the current funding rate and open interest for BTC futures?"
+pruned_names = {"get_funding_rates", "get_coin_summary"}
+pruned = [t for t in external if t.name in pruned_names]
+
+calls_all, ans_all = await run_with_usage(create_agent(model=model(), tools=external), Q1)
+calls_2, ans_2 = await run_with_usage(create_agent(model=model(), tools=pruned), Q1)
+
+print("ALL 7 tools : first-call tokens =", calls_all[0], "| per-call:", calls_all)
+print("PRUNED 2    : first-call tokens =", calls_2[0], "| per-call:", calls_2)
+print("answer (all):", ans_all[:70].replace("\n", " "))
+print("answer (2)  :", ans_2[:70].replace("\n", " "))
+```
+
+**Step 7 — A/B 2: shape the results on your own server.** Now the *variable cost*. Both agents answer *"Read the recent logs for BTC and summarize what happened."* — one bound only to `digest_logs` (the raw firehose, 300 lines ≈ 14 KB by default), one only to `digest_highlights` (the *same* events, compressed server-side to ~160 chars). First measure the result sizes directly (free — no model involved), then run the agents and watch the **second** call: that is how much context the tool result dragged into the model.
+
+```python
+logs_fat = [t for t in local if t.name == "digest_logs"][0]
+logs_lean = [t for t in local if t.name == "digest_highlights"][0]
+fat_result = await logs_fat.ainvoke({"coins": "BTC"})
+lean_result = await logs_lean.ainvoke({"coins": "BTC"})
+print("fat result chars: ", len(str(fat_result)))
+print("lean result chars:", len(str(lean_result)))
+
+Q2 = "Read the recent logs for BTC and summarize what happened."
+calls_fat, ans_fat = await run_with_usage(create_agent(model=model(), tools=[logs_fat]), Q2)
+calls_lean, ans_lean = await run_with_usage(create_agent(model=model(), tools=[logs_lean]), Q2)
+
+print("FAT  run per-call tokens:", calls_fat)
+print("LEAN run per-call tokens:", calls_lean)
+print("answer (fat) :", ans_fat[:70].replace("\n", " "))
+print("answer (lean):", ans_lean[:70].replace("\n", " "))
+```
 
 **Step 8 — Close the ledger.** Print one comparison table (schema chars, result chars, first-call tokens, second-call tokens) and read the ratios back. Under Advanced difficulty this is where you connect the numbers to the decision: prune, describe, shape — and when each lever is available to you.
 
+```python
+fat_ctx = calls_fat[1] if len(calls_fat) > 1 else 0
+lean_ctx = calls_lean[1] if len(calls_lean) > 1 else 0
+print(f"prune: decision tokens   {calls_all[0]:>6} -> {calls_2[0]:>6}   ({(1 - calls_2[0] / calls_all[0]):.0%} less)")
+print(f"shape: result chars      {len(str(fat_result)):>6} -> {len(str(lean_result)):>6}   ({(1 - len(str(lean_result)) / len(str(fat_result))):.0%} less)")
+print(f"shape: post-result ctx   {fat_ctx:>6} -> {lean_ctx:>6}   ({(1 - lean_ctx / fat_ctx):.0%} less)")
+```
+
 **Step 9 — Shut the server down.** Terminate the background process, but only the one this kernel spawned (track the `Popen` handle and check it is still alive). If a server was already running when you started, leave it alone.
+
+```python
+if server is not None and server.poll() is None:
+    server.terminate()
+    print("stopped the server we spawned")
+else:
+    print("no server process to stop (server already running or already exited)")
+```
 
 ---
 
