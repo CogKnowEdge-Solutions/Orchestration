@@ -98,6 +98,8 @@ You will also see the context ledger itself: each external tool's schema footpri
 
 ### Remote MCP is the same protocol, different transport
 
+![Remote MCP: Local vs Hosted](sources/LocalvsRemote.png)
+
 Lab 7 connected MCP servers over **stdio**: the client spawns the server as a subprocess and they talk over pipes. A **remote (hosted) MCP server** runs on a machine you don't own and exposes its tools over HTTP. The MCP message layer (JSON-RPC: `initialize`, `tools/list`, `tools/call`) is identical — only the transport changes, and therefore only the connection dictionary changes in your code:
 
 ```
