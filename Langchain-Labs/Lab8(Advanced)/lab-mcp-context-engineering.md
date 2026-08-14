@@ -8,6 +8,15 @@
 
 **MCP & Context Engineering: remote/hosted MCP servers plus deliberately shaping what context reaches the model.**
 
+### What context engineering is
+
+**Context engineering** is the deliberate practice of deciding what does — and does not — enter the model's context window. In an agent, that context is a *budget* to manage:
+
+- **Every token costs** — each one you send costs money, slows the request, and crowds out the tokens that actually matter.
+- **Context is rebuilt on every step** — from the system prompt, each bound tool's schema and description, the conversation history, and the latest tool results; it is never written once.
+- **It decides the agent's actions** — an agent picks its next step from the context alone, so a bloated schema, a verbose payload, or a buried instruction degrades its choices before the model even thinks.
+- **It's a skill you practice** — the rest of this lab does it in miniature: *measure* the budget, then shrink it with *prune*, *describe*, and *shape*.
+
 ---
 
 ## 2. Problem Statement / Use Case Overview
