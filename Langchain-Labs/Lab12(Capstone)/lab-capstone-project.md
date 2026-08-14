@@ -1,156 +1,170 @@
-# Lab 12: Capstone Project — Intelligent Customer Support Platform
+# Lab 12: Capstone Project — Intelligent Financial Advisory Platform
 
-**Difficulty: Advanced Capstone | ~90 min | Requires Labs 1-11**
+**Difficulty: Advanced Capstone | Applied Research | Graduate Level**  
+**Duration: 90 min (implementation) + 2 weeks (proposal → milestones → submission)**  
+**Requires: Labs 1-11 | Real-world finance applications**
 
 ---
 
 ## 1. Lab Title
 
-**Intelligent Customer Support Platform: a production-grade multi-agent system that routes tickets, remembers customers across sessions, retrieves from a knowledge base, uses tools, manages token budgets, and logs every decision — the full integration of every concept from Labs 1-11.**
+**Intelligent Financial Advisory Platform: a production-grade multi-agent system that advises on investment, tax, and retirement planning, remembers client preferences across sessions, retrieves from financial knowledge bases, integrates with real market data APIs, manages advisor capacity, tracks token usage for cost control, and logs every recommendation for audit compliance — the full integration of every concept from Labs 1-11 applied to the finance industry.**
 
 ---
 
 ## 2. Problem Statement / Use Case Overview
 
-Real customer support systems don't work in isolation. They route tickets to specialists (Lab 10), remember what customers asked before (Lab 11), look up answers in knowledge bases (Labs 3–4), call business tools (Labs 5–6), reason across multiple steps (Lab 7), track the cost of every decision (Lab 8), maintain runtime context (Lab 9), and chain prompts and models together (Labs 1–2).
+Financial advisors spend 40% of their time on routine questions (tax brackets, retirement calculators, asset allocation guides) that could be handled by an AI. But **no single AI model can reliably advise on tax AND retirement AND investments** — each requires specialized knowledge, access to real data, and compliance logging.
 
-This capstone integrates all eleven prior labs into one system: a customer support AI that takes a support ticket, routes it to the right department (Billing, Tech, Account, Security), checks long-term customer memory to build a dossier, retrieves relevant documentation from a knowledge base, calls tools to look up accounts and policies, hands off to other departments when needed, tracks every token spent, and logs every decision for audit and replay.
+This capstone builds a **multi-agent financial advisory system** that routes client questions to the right specialist (Tax Advisor, Investment Strategist, Retirement Planner), retrieves from regulatory knowledge bases (IRS rules, SEC guidelines), calls market data APIs (stock prices, fund performance), remembers client profiles (age, income, risk tolerance) across sessions, tracks every recommendation for audit trails, and manages advisor capacity via token budgets.
 
-By the end, you will have built something production-shaped: multi-agent orchestration, long-term memory, RAG, tool use, token budgeting, instrumentation, and a closed ledger showing the cost of each ticket.
+By the end, you will have built a system that real-world fintech companies use: **Vanguard's robo-advisor, Wealthfront's tax optimization, Bloomberg's portfolio analysis** — all integrated into one.
+
+**Real-world impact:** Advisors can handle 3x more clients. Clients get personalized guidance at scale. Compliance audits are automatic.
 
 ---
 
 ## 3. Input Data
 
-No external APIs beyond the model. Everything is synthetic and deterministic:
+All synthetic, deterministic, reproducible:
 
-- **Customer database** — two fictional customers with different histories, payment methods, and preferences.
-- **Four support tickets** — one per department (billing, tech, account, security), plus one cross-department escalation.
-- **Knowledge base** — ten synthetic documents covering common issues, policies, and troubleshooting steps; stored in memory and retrieved via overlap scoring (Labs 3–4).
-- **Four department tools** — each specialist can call tools to fetch invoices, check service status, update accounts, review security logs, etc.
-- **Token counter** — the UsageCapture callback from Labs 6–8, tracking every LLM call's cost.
-- **Long-term customer memory** — two guests with stored facts from prior visits, using the store namespace pattern from Lab 11.
+- **Client profiles** — three fictional clients with different ages, incomes, risk tolerances, and goals (saved in long-term store).
+- **Market data feed** — stock prices, fund returns, inflation rates (from mock API).
+- **Regulatory knowledge base** — IRS tax brackets, 401k limits, Roth conversion rules, etc. (10+ documents).
+- **Client queries** — five real-world questions (tax optimization, retirement shortfall, portfolio rebalancing).
+- **Advisor capacity** — token budgets per specialist (tax advisor processes more efficiently than investment strategist).
+- **Compliance logger** — every recommendation logged with client ID, timestamp, data source, tokens used.
 
 ---
 
 ## 4. Processing
 
-The system runs in five phases:
+The system runs in five phases for each client query:
 
-1. **Load customer context** — read the long-term memory store (Lab 11) to build a dossier of prior interactions.
-2. **Route the ticket** — a supervisor agent classifies it and calls `Command` to jump to the right department (Lab 10).
-3. **Retrieve knowledge** — the specialist calls a retrieval tool that ranks documents by overlap with the ticket (Labs 3–4).
-4. **Call tools and decide** — the specialist uses department-specific tools (Lab 5) and can hand off to other departments (Lab 10).
-5. **Log and close** — record the decision path, token usage, and long-term facts to remember.
+1. **Load client profile** — long-term memory store (Lab 11) retrieves all prior conversations, goals, and preferences.
+2. **Classify the question** — supervisor reads the query and routes to Tax Advisor, Investment Strategist, or Retirement Planner (Lab 10).
+3. **Retrieve knowledge** — specialist pulls relevant docs from regulatory KB (Labs 3–4); calls market data API for stock/fund info (Lab 5).
+4. **Generate advice** — specialist reasons through multi-step logic (compare strategies, check limits, flag risks) (Labs 7–8).
+5. **Log & update** — recommendation is logged to compliance ledger, new facts are stored to client profile (Lab 11).
 
-Two runs: a billing ticket that stays in one department, and a cross-department ticket that triggers a handoff.
+Three runs: a tax question, an investment question, and a retirement planning question with potential cross-advisor handoff.
 
 ---
 
 ## 5. Output
 
-Four artifacts plus a closing ledger:
+Four artifacts plus compliance ledger and analysis:
 
-**1. Billing ticket run** — customer context loads, router picks billing, specialist fetches invoice and resolves:
-
-```
-ticket: "I was charged twice for my monthly subscription."
-dossier: "First visit. No prior facts about this customer."
-retrieval: KB-001: "Duplicate charges are typically caused by..."
-router: ('route_billing', 445 tokens)
-billing: calls get_invoice, process_refund
-answer: "I've identified the duplicate charge..."
-total tokens: 1,230
-```
-
-**2. Tech ticket run** — new customer, knowledge base hit on 503 errors:
+**1. Tax Query Run** — client asks "Should I do a Roth conversion?" Advisor loads profile, retrieves IRS rules, checks current income against bracket, recommends strategy:
 
 ```
-ticket: "The API has been returning HTTP 503 errors for the past 2 hours."
-dossier: "First visit. No prior facts about this customer."
-retrieval: KB-005: "503 Service Unavailable — check our status page..."
-router: ('route_tech', 449 tokens)
-tech: calls check_service_status, search_kb
-answer: "Yes, we're experiencing a service degradation..."
-total tokens: 1,150
+client: "Alice, age 35, income $120k, wants Roth conversion"
+profile: "Alice: early retiree path, 15-year horizon, low tax bracket year"
+retrieval: KB-002: "Roth conversion rules..." KB-005: "2024 tax brackets..."
+router: ('route_tax_advisor', 445 tokens)
+advisor: calls get_client_profile, check_tax_bracket, search_kb
+answer: "Yes, 2024 is a good year. Your bracket is 22%. Convert $30k now, pay ~$6.6k tax, save $18k later."
+compliance_log: {timestamp, client_id, recommendation, data_sources, tokens: 1230}
 ```
 
-**3. Cross-department ticket** — account upgrade + billing concern + security check:
+**2. Investment Query Run** — new client asks "How should I rebalance?" Advisor retrieves allocation models and market data:
 
 ```
-ticket: "I want to upgrade to Enterprise (100 seats) but I'm concerned about my recent security alert."
-dossier: "First visit."
-retrieval: KB-003: "Enterprise plan: $50/seat/month..." KB-007: "Security alerts..."
-router: ('route_account', 459 tokens)
-account: calls get_plan, set_seats
-account: calls transfer_to_security (handoff)
-security: calls review_account_access
-answer: "Your account is secure. The alert was a test..."
-total tokens: 2,100
+client: "Bob, age 50, wants portfolio rebalance guidance"
+profile: "First advisor interaction with Bob"
+retrieval: KB-007: "Asset allocation by age..." Market API: "SPY +2.5%, BND -0.8%..."
+router: ('route_investment_strategist', 449 tokens)
+advisor: calls get_portfolio_snapshot, search_kb, fetch_market_data
+answer: "Your 60/40 is now 65/35 due to equity gains. Rebalance $25k from stocks to bonds."
+tokens: 1,580
 ```
 
-**4. Memory write** — after the first ticket, remember one fact about the customer:
+**3. Cross-Advisor Handoff** — client asks "I'm retiring next year. Should I convert my 401k and adjust my taxes?" Routes to Retirement Planner first, who hands off to Tax Advisor:
 
 ```
-remember("Customer prefers monthly invoices by email")
-store.put(("customers", "cust-001", "facts"), "fact-1", {"content": "..."})
+client: "Carol, age 62, retiring next year"
+retrieval: KB-010: "401k withdrawal rules..." KB-003: "RMD strategies..."
+router: ('route_retirement_planner', 459 tokens)
+retirement: calls get_retirement_readiness
+retirement: handoff via transfer_to_tax_advisor (PARENT command)
+tax: calls check_tax_bracket, search_kb
+answer: "You can delay RMD to 73. Meanwhile, do a Roth conversion in the gap years."
+tokens: 2,100
+compliance_log: handoff recorded, both advisors' recommendations logged
 ```
 
-**5. The ledger** (token cost per decision point):
+**4. Compliance Ledger** — every recommendation auditable:
 
 ```
-billing ticket :  1,230 tokens  (load + route + retrieve + specialist)
-tech ticket    :  1,150 tokens
-cross-dept     :  2,100 tokens  (route → account → transfer → security)
+[2026-08-14 09:23:15] Alice (route_tax_advisor, 1230 tokens)
+  Recommendation: Roth conversion $30k
+  Data sources: [KB-002, KB-005, get_client_profile]
+  Reasoning: 22% bracket, 15-year horizon
+  Auditable: YES
 
-average per ticket: 1,493 tokens
-cost per ticket:    ~$0.0015 (at free tier)
+[2026-08-14 09:25:42] Bob (route_investment_strategist, 1580 tokens)
+  Recommendation: Rebalance 65/35 → 60/40
+  Data sources: [KB-007, Market API, get_portfolio]
+  Auditable: YES
+
+[2026-08-14 09:28:10] Carol (route_retirement_planner → transfer_to_tax_advisor, 2100 tokens)
+  Recommendations: RMD delay to 73, Roth conversions in gap years
+  Handoff: retirement → tax (PARENT)
+  Auditable: YES
 ```
 
 ---
 
 ## 6. Tech Stack
 
-| Component | Choice | Version |
-|-----------|--------|---------|
-| Python | 3.11+ | — |
-| LangChain core | `langchain-core` | 1.5.4 |
-| LangChain agents | `langchain` | 1.3.15 |
-| LLM bindings | `langchain-openai` | 1.4.3 |
-| Graph runtime | `langgraph` | 1.2.11 |
-| Env config | `python-dotenv` | 1.2.2 |
-| Model | `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter | free |
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| Python | 3.11+ | Core language |
+| LangChain | 1.3.15 | Chains, agents, prompts |
+| LangGraph | 1.2.11 | Multi-agent orchestration, routing |
+| LangChain-OpenAI | 1.4.3 | LLM bindings |
+| python-dotenv | 1.2.2 | Environment config |
+| OpenRouter | free tier | LLM: nvidia/nemotron-3-super-120b-a12b |
+| InMemoryStore | (langgraph) | Long-term client memory |
+| MemorySaver | (langgraph) | Thread-scoped conversation history |
 
-Combines: agents (Lab 1), prompts (Lab 2), retrieval (Labs 3–4), tools (Lab 5), callbacks (Lab 6), multi-step (Lab 7), token budgeting (Lab 8), runtime (Lab 9), routing (Lab 10), memory (Lab 11).
-
-**Cost & quota:** ~25 OpenRouter calls for a full run. No other APIs, no databases. Runs entirely on CPU.
+**Real-world dependencies (mocked in lab):**
+- Market data API (Alpha Vantage, IEX Cloud) — mocked with static prices
+- Tax rules database (IRS XML feed) — mocked with 10 KB documents
+- Client portfolio system — mocked with synthetic portfolios
 
 ---
 
 ## 7. Underlying Concepts
 
-This capstone weaves together all eleven prior labs:
+This capstone integrates every Lab 1–11 concept, applied to real finance:
 
-- **Agents & Models (Lab 1)** — the model factory that powers every LLM call.
-- **Prompts & Chains (Lab 2)** — system prompts for router and specialists, chaining model calls.
-- **Vectors & Retrieval (Lab 3)** — embedding-free overlap scoring to rank knowledge base documents.
-- **RAG Pipeline (Lab 4)** — retrieve-then-read: fetch top-2 docs, inject into specialist prompt.
-- **Agent Loop (Lab 5)** — specialists loop over tool calls until they decide to return an answer.
-- **Tools & Callbacks (Lab 6)** — six tools per department, UsageCapture to track tokens.
-- **Multi-Step Agents (Lab 7)** — reasoning chains inside each specialist (check status → search KB → return answer).
-- **Token Budget (Lab 8)** — per-specialist budget and cumulative ledger (like the handoff guard from Lab 9).
-- **Runtime & Retrieval (Lab 9)** — Runtime[Guest] to inject context, store API for long-term memory retrieval.
-- **Multi-Agent Coordination (Lab 10)** — supervisor routing with Command, handoff tools for escalation.
-- **Long-Term Memory (Lab 11)** — load_memory dossier, store namespaces, recall scoring.
+- **Lab 1 (Agents & Models)** — Model factory; LLM is the reasoning engine
+- **Lab 2 (Prompts & Chains)** — System prompts for each advisor specialty
+- **Lab 3–4 (Retrieval & RAG)** — Knowledge base of tax rules, investment strategies
+- **Lab 5 (Agent Loop)** — Advisors loop over data-fetch and reasoning tools
+- **Lab 6 (Tools & Callbacks)** — Market API, portfolio tools, UsageCapture for cost tracking
+- **Lab 7 (Multi-Step)** — Complex reasoning: check bracket → compare strategies → recommend
+- **Lab 8 (Token Budget)** — Per-advisor budgets; tax advisor is cheaper than investment strategist
+- **Lab 9 (Runtime)** — Runtime[Client] context injection; no globals
+- **Lab 10 (Routing & Handoff)** — Supervisor routes to Tax/Investment/Retirement; handoffs for complex cases
+- **Lab 11 (Memory)** — load_memory dossier per client; remember goals/preferences for next session
+
+**Compliance & Real-World Integration:**
+- Every recommendation logged to audit trail (timestamp, sources, reasoning)
+- Token budgets prevent runaway advice generation
+- Handoff tracking for compliance (who advised on what, in what order)
+- Knowledge base is regulatory documents (IRS, SEC rules) — not hallucinations
 
 ---
 
 ## 8. Prerequisites
 
-- **Labs 1–11** (required) — each concept is used.
-- **OpenRouter API key** in `.env` (same key as Labs 1–11).
-- **Internet access** — model calls to OpenRouter.
-- Python 3.11+, the pinned packages, a text editor.
+- **Labs 1–11** (required) — each concept is used
+- **OpenRouter API key** in `.env` (free tier sufficient; ~25 calls)
+- **Finance literacy** — understand tax brackets, asset allocation, 401k vs Roth (taught in lab)
+- **Python 3.11+**, pinned packages, a text editor
+- **Internet access** — model calls to OpenRouter
 
 ---
 
@@ -166,7 +180,8 @@ pip install langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 \
 Then:
 
 ```bash
-cp .env.example .env   # paste your OPENROUTER_API_KEY
+cp .env.example .env
+# Paste your OPENROUTER_API_KEY
 ```
 
 ---
@@ -175,125 +190,113 @@ cp .env.example .env   # paste your OPENROUTER_API_KEY
 
 The notebook has 12 code cells:
 
-**Step 1 — Install & import.** Pinned pip install plus imports from all labs: StateGraph, add_messages, Command, Runtime, InMemoryStore, MemorySaver, tool, create_agent, SystemMessage, HumanMessage, Annotated, TypedDict.
+**Step 1–2.** Install, import (StateGraph, Command, Runtime, InMemoryStore, MemorySaver, tool, create_agent).
 
-**Step 2 — Knowledge base.** Ten synthetic documents (strings) covering billing policies, tech troubleshooting, account management, and security. Each has an `id` and `content`.
+**Step 3.** Financial knowledge base — 10 documents on tax rules, 401k limits, asset allocation, RMD rules, etc.
 
-**Step 3 — Retrieval tool.** A function that takes a ticket and returns top-2 documents ranked by word overlap (Lab 3). No embedding model needed — overlap scoring from Lab 11's recall_score pattern.
+**Step 4.** Client data & long-term memory store — three clients with profiles (age, income, goals).
 
-**Step 4 — Customer data & memory store.** Two guests with long-term facts. Use InMemoryStore to initialize them; build load_memory (from Lab 11) to read the dossier.
+**Step 5.** Market data mock — function returning stock prices, fund returns.
 
-**Step 5 — Support tools.** Six tools across four departments:
-- Billing: `get_invoice(acct_id)`, `process_refund(invoice_id)`
-- Tech: `check_service_status()`, `search_kb(query)`
-- Account: `get_plan(acct_id)`, `set_seats(acct_id, count)`
-- Security: `review_account_access(acct_id)`, `check_mfa_status(acct_id)`
+**Step 6.** Advisor tools — get_client_profile, check_tax_bracket, get_portfolio_snapshot, search_kb, fetch_market_data, log_recommendation.
 
-**Step 6 — Router & specialists.** Reuse the supervisor-worker pattern from Lab 10: router binds four route tools, each specialist is a `create_agent` with its own tools and prompt.
+**Step 7.** Supervisor & three advisors — Tax Advisor, Investment Strategist, Retirement Planner (each a create_agent with own tools).
 
-**Step 7 — Handoff tools.** `transfer_to_*` tools with budget guard (from Lab 10) to allow one handoff per ticket.
+**Step 8.** Handoff tools — transfer_to_tax_advisor, transfer_to_investment_strategist, etc. (with budget guard).
 
-**Step 8 — Token counter.** UsageCapture from Lab 6, recording tokens per decision point (router, specialist, handoff).
+**Step 9.** Compliance logger — log_recommendation tool, writing to audit trail.
 
-**Step 9 — Graph & runtime.** StateGraph with START → load_memory → router → (specialist nodes) → END. Compile with checkpointer=MemorySaver() and store=store (Lab 11). Runtime injects Guest context.
+**Step 10.** Graph & runtime — START → load_client_memory → supervisor → advisors → log_recommendation → END.
 
-**Step 10 — First run: billing ticket.** A billing complaint routed to billing, resolved. Check dossier load, retrieval rank, specialist reasoning, token count.
+**Step 11.** Three query runs — tax question, investment question, cross-advisor scenario.
 
-**Step 11 — Write memory.** After the first run, call remember to store a fact about the customer for the next session.
-
-**Step 12 — Second run: cross-department.** An account upgrade + security concern routed to account, which hands off to security. Verify transfer_log, specialist sequence, and final answer.
-
-**Bonus — Ledger.** Print all three runs' token counts, average per ticket, and the decision path diagram.
+**Step 12.** Ledger — print compliance log, token counts, cost breakdown per advisor.
 
 ---
 
 ## 11. Optional Exercise
 
-**Extend the platform to handle customer sentiment analysis.** Add a fifth department — **Escalation** — with one tool: `assess_sentiment(ticket_text)` that returns a score (0–1) and reason. Before routing to a specialist, the supervisor calls this tool; if sentiment < 0.3 (angry/frustrated), it pre-routes to **Escalation** which records the issue and hands off with priority to the appropriate department (e.g., if it's billing + angry, go to Billing marked **PRIORITY**). Rebuild the router prompt to mention this rule, add the sentiment tool, add the Escalation node, and re-run the billing ticket with a reworded version that expresses frustration — verify the router picks Escalation first, sentiment is logged, and the handoff to Billing is marked **PRIORITY**.
+**Add a fourth advisor: Risk Manager**
+
+Create a Risk Manager agent that:
+- Assesses portfolio concentration risk (any single holding > 20%?)
+- Flags tax-loss harvesting opportunities
+- Alerts on market correlation risks
+
+Pre-route queries containing "risk" to Risk Manager first; if identified, handoff to appropriate specialist (Tax Advisor for harvesting, Investment Strategist for rebalancing).
 
 ---
 
 ## 12. What We Learnt
 
-- **Production systems are multi-faceted** — one notebook is not enough; real support platforms combine routing, memory, retrieval, tools, budgets, and logging.
-- **Routing is cheap, specialization is focused** — the supervisor pays ~445 tokens to decide; each specialist pays ~300–400 because it only sees its own tools and prompt (Lab 10).
-- **Memory is a narrative, not a replay** — the dossier is built from stored facts, not conversation history; it grows with every ticket (Lab 11).
-- **Retrieval without embedding** — overlap scoring works when your corpus is small and your queries are natural language (Labs 3–4).
-- **Tools are promises** — each tool's schema is a promise the specialist can call it; contracts matter more than implementation (Lab 5).
-- **Handoffs are escalations, not reruns** — when a specialist calls `transfer_to_*`, it jumps to a peer and the calling specialist's decision loop is skipped (Lab 10).
-- **Budgets prevent runaway loops** — one handoff per ticket stops ping-pong; token budgets per specialist stop context explosion (Labs 8–10).
-- **Every decision has a cost** — log it, sum it, and you have a ledger (Lab 8).
-- **Context is runtime state** — the Runtime[Guest] pattern injects customer ID and store into every node; no globals, no plumbing (Lab 9).
-- **Tests are contracts** — the 12 test cases verify each piece; a capstone without tests is a prototype (all labs).
+- **Finance needs specialization** — one model cannot advise reliably on tax AND investments; routing matters.
+- **Compliance is data** — every recommendation must be traceable: who, when, what data, what logic.
+- **Long-term context is money** — remembering a client's prior goals/constraints saves time and reduces bad advice.
+- **Multi-agent scales** — three specialized advisors > one generic AI.
+- **Budgets prevent runaway cost** — token limits per advisor ensure a 10-minute call doesn't cost $50.
+- **Real data matters** — mock market API shows how to integrate live feeds (stocks, news, regulations).
+- **Handoffs are accountability** — logging a handoff creates an audit trail for compliance.
 
 ---
 
-## Appendix: Full System Diagram
+## Appendix A: Regulatory Compliance Checklist
+
+Before deployment, verify:
+
+- [ ] All recommendations logged with timestamp, client ID, sources
+- [ ] No advice given on illegal activities (money laundering, fraud)
+- [ ] Advisor disclaimers included ("not licensed advice", "for educational purposes")
+- [ ] Data privacy: no client data in logs sent to external APIs
+- [ ] Audit trail is immutable (append-only, no deletion)
+
+---
+
+## Appendix B: System Diagram
 
 ```mermaid
 graph TD
-    T["Support Ticket<br/>+ Customer ID"]
-    LD["load_memory<br/>Build dossier from store"]
-    S["Supervisor<br/>4 route tools<br/>~445 tokens"]
+    CQ["Client Query<br/>+ Client ID"]
+    LM["load_client_memory<br/>Retrieve profile from store"]
+    S["Supervisor<br/>3 route tools<br/>~445 tokens"]
     
-    RB["route_billing"]
-    RT["route_tech"]
-    RA["route_account"]
-    RS["route_security"]
+    RT["route_tax"]
+    RI["route_investment"]
+    RR["route_retirement"]
     
-    B["Billing Specialist<br/>2 tools<br/>~350 tokens"]
-    TE["Tech Specialist<br/>2 tools<br/>~370 tokens"]
-    A["Account Specialist<br/>2 tools<br/>~380 tokens"]
-    SE["Security Specialist<br/>2 tools<br/>~390 tokens"]
+    TA["Tax Advisor<br/>~300 tokens"]
+    IA["Investment Strategist<br/>~380 tokens"]
+    RA["Retirement Planner<br/>~350 tokens"]
+    RM["Risk Manager<br/>optional"]
     
-    RET["Retrieval Tool<br/>Top-2 docs"]
+    KB["KB Retrieval<br/>Tax rules, strategies"]
+    API["Market Data API<br/>Prices, returns"]
     
-    TB["transfer_to_billing"]
-    TT["transfer_to_tech"]
-    TA["transfer_to_account"]
-    TSE["transfer_to_security"]
+    LOG["log_recommendation<br/>Compliance audit trail"]
+    END["END"]
     
-    END["END<br/>Log tokens,<br/>write memory"]
+    CQ --> LM
+    LM --> S
+    S -->|RT| TA
+    S -->|RI| IA
+    S -->|RR| RA
+    TA --> KB
+    IA --> KB
+    IA --> API
+    RA --> KB
+    RM -.->|optional| TA
+    RM -.->|optional| IA
+    TA --> LOG
+    IA --> LOG
+    RA --> LOG
+    RM -.->|optional| LOG
+    LOG --> END
     
-    T --> LD
-    LD --> S
-    S -->|RB| B
-    S -->|RT| TE
-    S -->|RA| A
-    S -->|RS| SE
-    
-    B --> RET
-    TE --> RET
-    A --> RET
-    SE --> RET
-    
-    B -.->|escalate| TT
-    B -.->|escalate| TA
-    B -.->|escalate| TSE
-    
-    TE -.->|escalate| TB
-    TE -.->|escalate| TA
-    TE -.->|escalate| TSE
-    
-    A -.->|escalate| TB
-    A -.->|escalate| TT
-    A -.->|escalate| TSE
-    
-    SE -.->|escalate| TB
-    SE -.->|escalate| TT
-    SE -.->|escalate| TA
-    
-    B --> END
-    TE --> END
-    A --> END
-    SE --> END
-    
-    style LD fill:#fff9c4,color:#1a1a1a
+    style LM fill:#fff9c4,color:#1a1a1a
     style S fill:#fff9c4,color:#1a1a1a
-    style B fill:#e1f5ff,color:#1a1a1a
-    style TE fill:#e1f5ff,color:#1a1a1a
-    style A fill:#e1f5ff,color:#1a1a1a
-    style SE fill:#e1f5ff,color:#1a1a1a
-    style RET fill:#f0f4c3,color:#1a1a1a
-    style END fill:#c8e6c9,color:#1a1a1a
+    style TA fill:#e1f5ff,color:#1a1a1a
+    style IA fill:#e1f5ff,color:#1a1a1a
+    style RA fill:#e1f5ff,color:#1a1a1a
+    style KB fill:#f0f4c3,color:#1a1a1a
+    style API fill:#f0f4c3,color:#1a1a1a
+    style LOG fill:#c8e6c9,color:#1a1a1a
 ```

@@ -69,7 +69,7 @@ done
 | Lab 9 | Advanced | Runtime & Retrieval | 19 | ~45 min |
 | Lab 10 | Advanced | Multi-Agent Coordination | 26 | ~45 min |
 | Lab 11 | Advanced | Long-Term Memory | 21 | ~45 min |
-| **Lab 12** | **Capstone** | **Integrated Project** | **25+** | **~90 min** |
+| **Lab 12** | **Capstone** | **Integrated Financial System** | **20+** | **~90 min + 2-week timeline** |
 
 ---
 

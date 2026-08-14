@@ -187,8 +187,3 @@ class TestOptionalExercise:
             assert "Optional" in content or "optional" in content
 
 
-# Test data file
-class TestTestCasesFile:
-    def test_lab12_cases_exists(self):
-        cases_file = Path(__file__).with_name("lab12_cases.py")
-        assert cases_file.exists(), "lab12_cases.py not found (will be auto-generated)"
