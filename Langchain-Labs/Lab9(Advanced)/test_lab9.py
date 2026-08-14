@@ -88,7 +88,7 @@ class TestNotebookArtifact:
             if line.startswith("!pip install"):
                 break
             assert line.strip() == "" or line.startswith("#")
-        packages = [tok.strip('"') for tok in pip_lines[0].split()[2:]]
+        packages = [tok.strip('"') for tok in pip_lines[0].split()[2:] if not tok.startswith("-")]
         assert packages, "install line lists at least one module"
         assert all("==" in pkg for pkg in packages), "every module must be pinned"
         assert set(packages) == set(PINNED)

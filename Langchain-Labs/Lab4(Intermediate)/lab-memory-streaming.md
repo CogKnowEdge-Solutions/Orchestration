@@ -194,7 +194,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 pip install --upgrade pip
-pip install "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4" "jupyterlab" "ipykernel"
+pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4" "jupyterlab" "ipykernel"
 ```
 
 Then create your key file:
@@ -227,7 +227,7 @@ When it finishes you should see `Successfully installed ...` (or `Requirement al
 
 ```python
 # One command installs all required modules (versions pinned for reproducibility)
-!pip install "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4"
+!pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4"
 ```
 
 ### Step 2 — Load the key

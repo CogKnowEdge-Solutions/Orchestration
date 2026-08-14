@@ -211,7 +211,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 pip install --upgrade pip
-pip install "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "langgraph==1.1.6" "python-dotenv==1.2.2" "pydantic==2.13.4" "jupyterlab" "ipykernel"
+pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "langgraph==1.1.6" "python-dotenv==1.2.2" "pydantic==2.13.4" "jupyterlab" "ipykernel"
 ```
 
 Then create your key file:
@@ -242,7 +242,7 @@ This first command installs the Python libraries the lab needs, with exact versi
 
 ```python
 # One command installs all required modules (versions pinned for reproducibility)
-!pip install "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "langgraph==1.1.6" "python-dotenv==1.2.2" "pydantic==2.13.4"
+!pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "langgraph==1.1.6" "python-dotenv==1.2.2" "pydantic==2.13.4"
 ```
 
 ### Step 2 — Load the key

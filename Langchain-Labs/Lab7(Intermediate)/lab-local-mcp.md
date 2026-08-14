@@ -152,7 +152,7 @@ This is the payoff: your agent's toolset is no longer fixed at build time. The s
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 \
+pip install -qU langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 \
     langgraph==1.2.11 langchain-mcp-adapters==0.3.2 mcp==1.29.0 python-dotenv==1.2.2
 
 cp .env.example .env   # then paste your OpenRouter key into .env
@@ -173,7 +173,7 @@ One pinned command installs the LangChain stack from the previous labs plus the 
 
 ```python
 # One command installs all required modules (versions pinned for reproducibility)
-!pip install langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 langgraph==1.2.11 langchain-mcp-adapters==0.3.2 mcp==1.29.0 python-dotenv==1.2.2
+!pip install -qU langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 langgraph==1.2.11 langchain-mcp-adapters==0.3.2 mcp==1.29.0 python-dotenv==1.2.2
 ```
 
 ### Step 2 — Load the key

@@ -58,7 +58,7 @@ class TestNotebookArtifact:
         lines = cells[0].splitlines()
         pip_lines = [ln for ln in lines if ln.startswith("!pip install")]
         assert len(pip_lines) == 1, "First cell must have exactly one pip install"
-        packages = [tok.strip('"') for tok in pip_lines[0].split()[2:]]
+        packages = [tok.strip('"') for tok in pip_lines[0].split()[2:] if not tok.startswith("-")]
         assert all("==" in pkg for pkg in packages), "All packages must be pinned"
         assert set(packages) == set(PINNED), f"Expected {PINNED}, got {packages}"
 

@@ -142,7 +142,7 @@ Instructor Approval: _____________  Date: _________
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 \
+pip install -qU langchain==1.3.15 langchain-core==1.5.4 langchain-openai==1.4.3 \
     langgraph==1.2.11 python-dotenv==1.2.2
 
 cp .env.example .env
