@@ -16,7 +16,7 @@
 
 ### How MCP works in this lab
 
-![How local MCP works in this lab](sources/lab7-mcp-flow.png)
+![How local MCP works in this lab](sources/MCP.png)
 
 Your notebook is the **client** (`MultiServerMCPClient`). It spawns `mcp_notes_server.py` (the **server**) as a subprocess, the two processes talk over **stdio** using JSON-RPC messages (`initialize`, `ListTools`, `CallTool`), and the server hands its four tools (`add_note`, `list_notes`, `get_note`, `delete_note`) to the agent, which reads and writes `notes.json`.
 
