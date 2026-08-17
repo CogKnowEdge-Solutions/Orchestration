@@ -231,6 +231,7 @@ The cell below installs all required Python packages:
 > **Note:** Run this cell first — it only needs to be run once per session.
 
 ```python
+# Setup -- install dependencies (run once per session)
 !pip install -q claude-agent-sdk python-dotenv
 ```
 
@@ -252,17 +253,18 @@ Import the standard library and SDK modules needed for session recovery:
 | `list_sessions` | Lists all session transcripts in the current project |
 
 ```python
+# Import libraries for async agent sessions, file paths, env vars, and SDK API
 import os
 import json
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from claude_agent_sdk import (
-    query,  # Core: sends a prompt, yields streaming ResultMessage objects
+    query,  # Core: sends prompt, yields streaming ResultMessage objects
     ClaudeAgentOptions,  # Configures tools, model, max_turns, resume, permissions
-    ResultMessage,  # Terminal message — carries session_id + final result text
-    get_session_messages,  # Read-only: reconstructs full transcript from session ID
-    list_sessions,  # Scans ~/.claude/projects/<encoded-cwd>/ for all session files
+    ResultMessage,  # Terminal message carrying session_id and final result
+    get_session_messages,  # Reads full transcript for a session ID
+    list_sessions,  # Scans local store and returns all session summaries
 )
 ```
 
@@ -281,12 +283,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 The cell below loads the key and verifies it is present:
 
 ```python
-# Load .env file into environment variables (does not override existing env vars)
+# Load API keys from .env file
+# load_dotenv() reads .env in CWD into os.environ (does not override existing vars)
 load_dotenv()
-
-# Read the API key from environment; set by .env or pre-exported in shell
+# os.getenv() reads from environment; key set by .env or already exported
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
 print(f"Anthropic key (SDK): {'Yes' if ANTHROPIC_API_KEY else 'No'}")
 ```
 
@@ -337,15 +338,17 @@ async def can_use_tool(tool_name: str, input_data: dict, context):
 async def run_with_crash(task: str, session_store=None):
     """Run agent with a low turn limit to simulate a crash."""
     # Configure tools, turn limit, permission mode, and model
+    # ClaudeAgentOptions configures tool access, turn limits, and model choice
+    # max_turns=2 is intentionally low — forces early termination to simulate a crash
     options = ClaudeAgentOptions(
-        allowed_tools=["Read", "Glob", "Grep", "Edit"],
-        max_turns=2,  # Forced early termination — simulates a production crash
+        allowed_tools=["Read", "Glob", "Grep", "Edit"],  # Tools for file-based refactoring
+        max_turns=2,  # Turn limit: agent stops after 2 tool-use cycles
         permission_mode="default",
         can_use_tool=can_use_tool,  # Interactive confirmation for Edit calls
         session_store=session_store,  # Optional custom persistence backend
         model="claude-haiku-4-5-20251001",
     )
-    session_id = None  # Will be set if a ResultMessage arrives before the crash
+    session_id = None  # Will be populated if we receive a ResultMessage
     # The prompt must be an async generator that yields message dicts.
     # Each yield is one user message in the conversation stream.
     async def prompt_stream():
@@ -356,16 +359,16 @@ async def run_with_crash(task: str, session_store=None):
             "session_id": "",  # Empty = create new session; fill to resume existing
         }
     try:
-        # query() returns an async generator yielding streaming messages
+        # query() returns an async generator — yields streaming messages in real time
         async for message in query(prompt=prompt_stream(), options=options):
-            # ResultMessage is the last message type — holds session_id and result
+            # ResultMessage is the terminal message type with session_id + final result
             if isinstance(message, ResultMessage):
-                session_id = message.session_id  # Capture UUID for recovery
+                session_id = message.session_id  # Capture the UUID for later recovery
                 if message.subtype == "success":
                     print(f"[Done] {message.result[:200]}")
     except Exception as e:
-        # Catches turn-limit, network, and SDK errors gracefully
-        # session_id is preserved in enclosing scope even after exception
+        # Catches turn-limit errors (expected), network failures, timeouts, etc.
+        # session_id is preserved in the outer scope even if the task didn't complete
         print(f"[Crash] {e}")
 
     return session_id
@@ -399,13 +402,13 @@ Each `SessionMessage` has:
 ```python
 def inspect_session(session_id: str):
     """Print the conversation history from a session."""
-    # get_session_messages() reads the persisted JSONL transcript from disk
-    # No agent runs — this is a pure read-only reconstruction of past activity
+    # get_session_messages() reads the persisted transcript from disk
+    # No agent runs — this is a pure read-only inspection of past activity
     messages = get_session_messages(session_id)
     print(f"\n--- Session {session_id[:8]}... ({len(messages)} messages) ---")
     for i, msg in enumerate(messages):
-        role = msg.type.upper()  # "USER" or "ASSISTANT"
-        # msg.message is a dict: {role, content} where content has text/tool blocks
+        role = msg.type.upper()  # 'USER' or 'ASSISTANT'
+        # msg.message is a dict with role, content blocks, tool calls, etc.
         # Truncated to 120 chars for a compact readable overview
         preview = str(msg.message)[:120]
         print(f"  [{i}] {role}: {preview}")
@@ -442,17 +445,16 @@ The `follow_up` prompt is typically a simple instruction like `"Continue exactly
 ```python
 async def resume_session(session_id: str, follow_up: str):
     """Resume a session from its last state."""
-    # resume=session_id tells the SDK to load the full history of the previous
-    # session and prepend it to the context window before adding the new prompt
+    # resume=session_id loads the full transcript and prepends it to context
+    # The agent sees everything from before the crash plus the new follow-up prompt
     options = ClaudeAgentOptions(
         allowed_tools=["Read", "Glob", "Grep", "Edit"],
-        resume=session_id,  # Load transcript from ~/.claude/projects/<encoded-cwd>/
+        resume=session_id,  # Key: tells SDK to restore this session's history
         permission_mode="default",
         can_use_tool=can_use_tool,
         model="claude-haiku-4-5-20251001",
     )
-    # follow_up is deliberately minimal (e.g. "Continue where you left off")
-    # because the restored transcript already contains the full task context
+    # FOLLOW_UP is deliberately minimal — session transcript already has full context
     async def prompt_stream():
         yield {
             "type": "user",
@@ -491,12 +493,12 @@ The `TASK` uses absolute paths resolved at runtime so the model cannot misinterp
 ```python
 from pathlib import Path
 
-# Path.resolve() converts relative "data" to an absolute path so the model
-# never misinterprets it as a root-relative path like /data/task_state.json
+# Path.resolve() converts relative "data" to an absolute path like
+# /Users/.../Module6/data so the model never misinterprets it as root /data
 DATA_DIR = Path("data").resolve()
-# TASK instructs the agent to read state files and continue unfinished work
+# TASK is the initial prompt: read state files and continue refactoring
 TASK = f"Read {DATA_DIR}/task_state.json and {DATA_DIR}/work_in_progress.txt, then continue the refactoring work described."
-# FOLLOW_UP is minimal — the restored session transcript has all prior context
+# FOLLOW_UP is minimal because the session transcript already has full context
 FOLLOW_UP = "Continue exactly where you left off."
 
 async def main():
@@ -545,13 +547,15 @@ The output confirms that the agent picked up exactly where it stopped — it did
 Sessions persist on disk indefinitely. Use `delete_session(id)` to clean up old ones.
 
 ```python
-# list_sessions() scans ~/.claude/projects/<encoded-cwd>/ and returns all sessions
+# Step 5 -- List all available sessions on disk
+# list_sessions() scans ~/.claude/projects/<encoded-cwd>/ and returns
+# every session summary — useful when you didn't capture the ID at runtime
 sessions = list_sessions()
 print(f"\n--- All Sessions ({len(sessions)}) ---")
 for s in sessions:
-    # session_id: UUID — use with resume= or get_session_messages()
+    # session_id: UUID for resume= or get_session_messages()
     # first_prompt: first 60 chars of initial user prompt
-    # created_at: timestamp (epoch ms or ISO 8601 depending on SDK version)
+    # created_at: timestamp as string (epoch ms or ISO 8601)
     print(f"  {s.session_id[:12]}... | {s.first_prompt[:60]} | {s.created_at}")
 ```
 

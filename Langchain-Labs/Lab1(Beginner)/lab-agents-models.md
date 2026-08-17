@@ -244,6 +244,7 @@ Pinning exact versions (`==1.2.15`, not `>=1.2.15`) means the lab behaves the sa
 When it finishes, the final line should read `Successfully installed ...`. If you already ran the Section 9 setup, you'll instead see `Requirement already satisfied` lines — that's fine, it just means the packages were already there. Either outcome is success.
 
 ```python
+# One command installs all required modules (versions pinned for reproducibility)
 !pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2"
 ```
 
@@ -260,8 +261,10 @@ The cell should produce no output at all — that's the success signal, it means
 import os
 from dotenv import load_dotenv
 
+# Read the OPENROUTER_API_KEY we saved in .env (Step 9 of the guide)
 load_dotenv()
 
+# Stop early with a clear message if the key is missing
 if not os.getenv("OPENROUTER_API_KEY"):
     raise SystemExit("No OPENROUTER_API_KEY found. Add it to .env and restart the kernel.")
 ```
@@ -279,6 +282,8 @@ Creating an object is silent, so don't expect any output — nothing printed is 
 ```python
 from langchain_openai import ChatOpenAI
 
+# Model 1: an open-weight model served free by OpenRouter
+# base_url redirects the standard OpenAI client to OpenRouter
 model_1 = ChatOpenAI(
     model="openai/gpt-oss-20b:free",
     base_url="https://openrouter.ai/api/v1",
@@ -308,6 +313,7 @@ Again, no output — but something important just happened: `agent` is now a com
 ```python
 from langchain.agents import create_agent
 
+# The agent = this model + this tool + the decision loop around them
 agent = create_agent(model_1, tools=[multiply])
 ```
 
@@ -325,9 +331,12 @@ The result is a dictionary (`result_1`) whose `"messages"` key holds the whole c
 Expect the answer `56` in some phrasing (e.g. "8 multiplied by 7 is 56"). The exact wording varies by model, but the number must be right. If you see `56`, the whole loop — model requests a tool, loop executes it, model answers — worked end to end.
 
 ```python
+# Run the agent loop with a user message
 result_1 = agent.invoke({
     "messages": [("user", "What is 8 multiplied by 7?")],
 })
+
+# Show only the final answer, not the whole conversation
 result_1["messages"][-1].content
 ```
 
@@ -338,6 +347,7 @@ Now the point of the lab. We build a *second* agent, `agent_2`, with a completel
 No output — but creating this agent required *zero changes* to anything except the model ID. If it builds, the swap is already half-proven; Step 8 proves the rest.
 
 ```python
+# Model 2: a different open-weight model, still free on OpenRouter
 model_2 = ChatOpenAI(
     model="nvidia/nemotron-nano-9b-v2:free",
     base_url="https://openrouter.ai/api/v1",
@@ -345,6 +355,7 @@ model_2 = ChatOpenAI(
     temperature=0,
 )
 
+# Same tools, same loop, new brain
 agent_2 = create_agent(model_2, tools=[multiply])
 ```
 
@@ -355,6 +366,7 @@ Now we send the exact same question, "What is 8 multiplied by 7?", through `agen
 Expect `56` again, probably phrased slightly differently (e.g. "The product of 8 and 7 is 56."). That's exactly what you want: the *answer* is identical while the *wording* differs, which is the signature of two different models doing the same correct job.
 
 ```python
+# Run the same question through the swapped model
 result_2 = agent_2.invoke({
     "messages": [("user", "What is 8 multiplied by 7?")],
 })
@@ -368,6 +380,7 @@ Last run: we use the agent on a *knowledge* question — "In one sentence, what 
 Expect a one-sentence definition of an AI agent. The exact wording varies, but the answer should describe something like a program that uses tools or makes decisions — and it should arrive *without* any tool call. Compare it to Steps 6 and 8: same agent, but this time no `multiply` ran.
 
 ```python
+# A plain-knowledge question: no tool, the loop just answers
 result_3 = agent_2.invoke({
     "messages": [("user", "In one sentence, what is an AI agent?")],
 })

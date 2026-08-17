@@ -255,6 +255,7 @@ Pinning exact versions (`==1.2.15`, not `>=1.2.15`) means the lab behaves the sa
 When it finishes, the final line should read `Successfully installed ...`. If you already ran the Section 9 setup, you'll instead see `Requirement already satisfied` lines — that's fine, either outcome is success.
 
 ```python
+# One command installs all required modules (versions pinned for reproducibility)
 !pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4"
 ```
 
@@ -271,8 +272,10 @@ The cell should produce no output at all — that's the success signal. If the k
 import os
 from dotenv import load_dotenv
 
+# Read the OPENROUTER_API_KEY we saved in .env (Section 9 of the guide)
 load_dotenv()
 
+# Stop early with a clear message if the key is missing
 if not os.getenv("OPENROUTER_API_KEY"):
     raise SystemExit("No OPENROUTER_API_KEY found. Add it to .env and restart the kernel.")
 ```
@@ -290,11 +293,12 @@ Creating an object is silent, so don't expect any output — nothing printed is 
 ```python
 from langchain_openai import ChatOpenAI
 
+# The model: same wrapper and settings as Lab 1
 model = ChatOpenAI(
-    model="nvidia/nemotron-3-super-120b-a12b:free",
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    temperature=0,
+    model="nvidia/nemotron-3-super-120b-a12b:free",  # a free model on OpenRouter
+    base_url="https://openrouter.ai/api/v1",   # redirect the OpenAI client to OpenRouter
+    api_key=os.getenv("OPENROUTER_API_KEY"),   # your key, read from .env
+    temperature=0,                              # 0 = factual, reproducible
 )
 ```
 
@@ -305,6 +309,7 @@ Now we ask for JSON the naive way — in plain English, with no schema and no en
 The second `print` is the key detail: `type(reply.content)` is `str`. That's the whole problem in one line. The JSON is *inside* the string, but your program would have to hunt for it, strip any fences, and `json.loads` it — and hope the model didn't leave a field out this time. We keep this cell in the lab because it makes the fix in Step 6 feel earned.
 
 ```python
+# Ask for JSON in plain English — no schema, no enforcement
 reply = model.invoke(
     "In one sentence, describe the movie 'Inception', then return a JSON object "
     "about it with fields title, director, and year."
@@ -327,6 +332,9 @@ The class itself does nothing yet — defining a schema doesn't call any model. 
 ```python
 from pydantic import BaseModel, Field
 
+# A schema: the exact shape we want the model's answer to take.
+# Each field has a type (str or int) and a description telling the model
+# what to put there. This class is the contract we hand to the model.
 class Movie(BaseModel):
     title: str = Field(description="The movie's title")
     director: str = Field(description="The director's full name")
@@ -340,6 +348,8 @@ Now the one-line pivot. `model.with_structured_output(Movie)` returns a *new* mo
 Then we invoke it with the same kind of request that produced a messy string in Step 4. The difference is visible in the output: `type(movie).__name__` prints `Movie` — not `str`. And each `movie.<field>` is real, typed data you can read by name.
 
 ```python
+# with_structured_output binds the schema to the model: every reply is
+# parsed and validated into a Movie object before you see it.
 structured_model = model.with_structured_output(Movie)
 
 movie = structured_model.invoke(
@@ -364,6 +374,7 @@ Now we prove `movie` is a normal Python object by doing normal Python things to 
 This is the practical payoff of Step 6: the object behaves like any object, so you can pass it to functions, save it as JSON, or store it in a database — all without ever writing a parser.
 
 ```python
+# A Movie is a real Python object, so we can treat it as data:
 print(movie.model_dump())                 # as a plain dict
 print(movie.model_dump_json(indent=2))    # as a clean JSON string
 print(isinstance(movie, Movie))           # it really is a Movie
@@ -374,6 +385,7 @@ print(isinstance(movie, Movie))           # it really is a Movie
 Now a realistic job. A customer review is free text; we want the facts. We define a second schema, `ProductReview`, with `product`, `rating`, and `sentiment` — then extract from a review paragraph. Note the pattern from Step 5 and 6 repeated: define the schema, call `with_structured_output`, invoke. The `product` value is pulled from the quoted text, `rating` is read from "Five stars," and `sentiment` summarizes the tone. That's the whole skill — schema + one method call.
 
 ```python
+# A new schema for a new job: extracting facts from a review
 class ProductReview(BaseModel):
     product: str = Field(description="The exact product being reviewed")
     rating: int = Field(description="The star rating, from 1 to 5")
@@ -386,6 +398,7 @@ review_text = (
     "effortless. Five stars from me."
 )
 
+# The same with_structured_output trick, one line: text in, ProductReview out
 review = model.with_structured_output(ProductReview).invoke(review_text)
 print(review.model_dump())
 ```
@@ -399,18 +412,22 @@ Last step: the reason structured output pays for itself. We keep a list of three
 Contrast this with Step 4's approach: there, averaging ratings would mean parsing three unpredictable strings. Here, each `parsed` is a `ProductReview` with an `int` rating, so the arithmetic is ordinary Python. That shift — from "hope the text parses" to "the data is already typed" — is the entire value of structured output.
 
 ```python
+# Three short reviews, one per line of the list
 reviews_text = [
     "I bought the 'AeroPress Coffee Maker' two weeks ago and it makes the best cup of coffee. Five stars from me.",
     "The 'Ergonomic Office Chair' arrived broken and customer service never replied. One star, terrible.",
     "My 'Wireless Noise-Cancelling Headphones' are great value — comfortable and the battery lasts all week. Four stars.",
 ]
 
+# Turn each review into a typed ProductReview object
 parsed_reviews = []
 for review_text in reviews_text:
     parsed = model.with_structured_output(ProductReview).invoke(review_text)
     parsed_reviews.append(parsed)
     print(f"{parsed.product} | rating {parsed.rating}/5 | {parsed.sentiment}")
 
+# Because the results are typed data, we can compute on them directly —
+# no string parsing, no cleaning up markdown fences.
 average_rating = sum(r.rating for r in parsed_reviews) / len(parsed_reviews)
 print(f"Average rating: {average_rating:.1f}")
 ```

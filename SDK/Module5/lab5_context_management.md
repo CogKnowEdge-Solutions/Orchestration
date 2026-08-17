@@ -248,7 +248,11 @@ The cell below installs all required Python packages:
 > **Note:** Run this cell first — it only needs to be run once per session.
 
 ```python
-!pip install -q claude-agent-sdk python-dotenv
+# Module 5: Context Management & Multi-Agent Orchestration
+# Lab: Research & Synthesis Pipeline
+
+# Setup -- install dependencies (run once per session)
+# !pip install -q claude-agent-sdk python-dotenv
 ```
 
 ## Import Libraries
@@ -266,9 +270,11 @@ Import the standard library and SDK modules needed for this lab:
 | `HookMatcher` | Routes hook events to callbacks (used in Step 6 for compaction) |
 
 ```python
+# Import libraries
 import os
 import json
 import asyncio
+from pathlib import Path
 from dotenv import load_dotenv
 from claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher  # query: sends prompts; ClaudeAgentOptions: configures agents; HookMatcher: routes hook events
 ```
@@ -288,12 +294,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 The cell below loads the key and verifies it is present:
 
 ```python
-# Load .env file into environment variables (does not override existing env vars)
+# Load API keys from .env file
 load_dotenv()
-
-# Read the API key from environment; set by .env or pre-exported in shell
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
 print(f"Anthropic key (SDK): {'Yes' if ANTHROPIC_API_KEY else 'No'}")
 ```
 
@@ -328,6 +331,8 @@ The agent will receive a prompt that instructs it to:
 This keeps the sub-agent's output small and focused — critical for efficient context handoff to the next agent.
 
 ```python
+# Step 1 -- Define the Researcher sub-agent
+# The Researcher only has WebSearch and WebFetch. No write access.
 async def run_researcher(topic: str) -> str:
     """Gather research on a topic using web tools only."""
     # Restricted toolset: read-only web access, no write capabilities
@@ -379,6 +384,8 @@ The prompt passes the Researcher's findings directly into the instructions via a
 The Writer is deliberately told to **not modify any other files** — this prevents it from accidentally altering anything outside the report.
 
 ```python
+# Step 2 -- Define the Writer sub-agent
+# The Writer only has the Edit tool. No web access.
 async def can_use_tool(tool_name: str, input_data: dict, context):
     if tool_name == "Edit":
         response = input(f"Allow Edit on {input_data.get('file_path', 'unknown')}? (y/n): ")
@@ -451,6 +458,8 @@ This pattern keeps each context window small:
 - Coordinator context: ~5k tokens (task + results only)
 
 ```python
+# Step 3 -- Define the Coordinator
+# The Coordinator orchestrates the full pipeline: research -> write
 async def run_coordinator(task: str, template_path: str, output_path: str) -> str:
     """Orchestrate research and writing phases."""
     print("[Coordinator] Starting research phase...")
@@ -486,6 +495,9 @@ Set the target paths and run the full orchestration. The `TEMPLATE_PATH` must po
 The `await run_coordinator(...)` call starts the entire pipeline. Because `run_coordinator` is async, this works in a Jupyter notebook's event loop. The pipeline is **sequential** — research completes before writing begins.
 
 ```python
+# Step 4 -- Execute the pipeline
+# Set target paths and run the full orchestration
+# Each sub-agent gets its own fresh context window
 TEMPLATE_PATH = "data/report_template.md"  # Template with placeholders to fill in
 OUTPUT_PATH = "data/completed_report.md"   # Destination written by the Writer
 TASK = "Quantum Computing"                 # Research topic passed to the Coordinator
@@ -528,16 +540,14 @@ Read the completed report from disk to confirm the Writer properly filled in the
 If the file does not exist, the Writer may have been blocked by permissions or the template path was incorrect.
 
 ```python
-from pathlib import Path
-
-# Verify the Writer created the report on disk.
-# This runs locally — no SDK calls, no token usage.
+# Step 5 -- Verify the output
+# Read the completed report to verify the Writer filled in the template
 report_file = Path(OUTPUT_PATH)
 if report_file.exists():
     print("--- Completed Report ---")
-    print(report_file.read_text())  # Dump the full markdown report
+    print(report_file.read_text())
 else:
-    print("Report not found.")  # Writer may have been blocked by permissions
+    print("Report not found.")
 ```
 
 **Expected output (truncated example):**

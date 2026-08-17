@@ -162,6 +162,9 @@ The loop includes a `MAX_ITERATIONS` counter to prevent infinite loops. In pract
 | `python-dotenv` | Loads API keys from a `.env` file |
 
 ```bash
+# Install the packages this lab needs:
+#   openai          -> OpenAI-compatible client used to call OpenRouter
+#   python-dotenv   -> loads the API key from a local .env file
 pip install -q openai python-dotenv
 ```
 
@@ -219,11 +222,18 @@ Register all tools in two structures:
 Initialize the OpenAI client with the OpenRouter base URL and your API key. Choose a model — the lab uses a free NVIDIA model on OpenRouter:
 
 ```python
+# Create the OpenAI-compatible client pointed at OpenRouter's API.
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
 )
+
+# Free-tier model via OpenRouter; TARGET_DIR is the codebase the agent will scan.
 MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+TARGET_DIR = "data"
+
+print(f"Model: {MODEL}")
+print(f"Target: {TARGET_DIR}")
 ```
 
 Set the `TARGET_DIR` to the codebase you want the agent to analyze.
@@ -235,10 +245,18 @@ Set the `TARGET_DIR` to the codebase you want the agent to analyze.
 Write a natural-language prompt describing what you want the agent to do. The model will decide which tools to call based on this prompt:
 
 ```python
+# The task tells the model WHAT to do, not HOW.
+# The model decides the tool sequence on its own.
 TASK = f"""
 Scan the codebase at {TARGET_DIR} and find all TODO and FIXME comments.
-For each match, report: file path, line number, comment text, and context.
-Organize as a markdown summary grouped by file.
+
+For each match, report:
+- File path
+- Line number
+- The comment text
+- A brief note on what the comment is about
+
+Organize the results as a markdown summary grouped by file.
 """
 ```
 
@@ -256,37 +274,63 @@ The agent loop is a `for` loop that:
 4. If text — the model has produced its final answer; break and return
 
 ```python
+# Seed the conversation: a system prompt (the agent's role) + the user task.
 messages = [
-    {"role": "system", "content": "You are a code exploration assistant..."},
+    {"role": "system", "content": "You are a code exploration assistant. Scan codebases, find patterns, and produce structured markdown reports. Be thorough but concise. Always cite file paths and line numbers."},
     {"role": "user", "content": TASK},
 ]
 
-final_answer = None
+tool_call_count = 0
+MAX_ITERATIONS = 15   # safety cap: prevents an infinite tool-calling loop
+final_answer = ""
 
 for i in range(MAX_ITERATIONS):
+    # Send the full history + tool schemas to the model.
     response = client.chat.completions.create(
-        model=MODEL, messages=messages, tools=TOOLS,
+        model=MODEL,
+        messages=messages,
+        tools=TOOLS,
     )
+
     if not response.choices:
         print(f"API returned no choices. Response: {response}")
         break
 
-    message = response.choices[0].message
+    choice = response.choices[0]
+    message = choice.message
 
     if message.tool_calls:
+        # The model wants to call tools: keep its message, run each call, then loop.
         messages.append(message)
+
         for tool_call in message.tool_calls:
             func_name = tool_call.function.name
             func_args = json.loads(tool_call.function.arguments)
-            result = TOOL_MAP[func_name](**func_args)
+            tool_call_count += 1
+
+            print(f"  [Call {tool_call_count}] {func_name}({func_args})")
+
+            # Dispatch to the matching local Python function.
+            if func_name in TOOL_MAP:
+                result = TOOL_MAP[func_name](**func_args)
+            else:
+                result = f"Unknown tool: {func_name}"
+
+            result_str = json.dumps(result, default=str)
+
+            # Feed the result back to the model as a 'tool'-role message.
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
-                "content": json.dumps(result, default=str),
+                "content": result_str,
             })
     else:
-        final_answer = message.content
+        # No tool calls -> the model produced its final text answer.
+        # Guard against empty/None content so downstream cells never crash.
+        final_answer = message.content or ""
         break
+
+print(f"\nDone. Tool calls made: {tool_call_count}")
 ```
 
 The model sees the full conversation history with each new request. This is how it maintains coherence across multiple tool calls.
@@ -298,8 +342,11 @@ The model sees the full conversation history with each new request. This is how 
 Use regex to parse the agent's free-form output and extract structured metrics:
 
 ```python
+# Post-process the free-form report with regex to pull out quick metrics:
+# TODO mentions, FIXME mentions, and unique .py files cited.
 todo_count = len(re.findall(r'(?i)TODO', final_answer))
 fixme_count = len(re.findall(r'(?i)FIXME', final_answer))
+
 file_mentions = len(set(re.findall(r'\b[\w/]+\.py\b', final_answer)))
 ```
 
@@ -312,17 +359,68 @@ This demonstrates a common pattern: LLMs produce unstructured text, but you can 
 Use a second LLM call to evaluate the agent's output. This is a common eval pattern — one LLM generates, another evaluates:
 
 ```python
+# Second LLM call: an automated judge grades the agent's output on 4 criteria.
+# It must return a compact JSON object so scores stay machine-parseable.
 judge_prompt = f"""
-Evaluate the agent output on: COVERAGE, ACCURACY, COMPLETENESS, FORMAT.
-Score each 1-5 and give an overall score. Be strict.
+You are an evaluation judge. Analyze the following agent output and the codebase.
+
+AGENT OUTPUT:
+{final_answer}
+
+TASK: Find all TODO and FIXME comments in the codebase.
+
+Evaluate on these criteria:
+1. COVERAGE: Did the agent find all the TODO/FIXME comments?
+2. ACCURACY: Are all reported items real TODO/FIXME comments (not false positives from strings)?
+3. COMPLETENESS: Did it include file paths and line numbers?
+4. FORMAT: Is the output well-organized and readable?
+
+Score each criterion 1-5 and give an overall score. Be strict.
 
 Respond with ONLY a compact JSON object and nothing else, using exactly these keys:
 {{"coverage": <int 1-5>, "accuracy": <int 1-5>, "completeness": <int 1-5>, "format": <int 1-5>, "overall": <int 1-5>}}
 """
-judge_response = client.chat.completions.create(
-    model=MODEL,
-    messages=[{"role": "user", "content": judge_prompt}],
-)
+
+
+def extract_json_scores(text):
+    """Parse a JSON object from the judge response, tolerating prose or fences."""
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+        return json.loads(match.group(0)) if match else None
+
+
+# Free models sometimes answer with prose instead of JSON, so we retry up to 3
+# times, appending a corrective re-prompt after each unparseable attempt.
+judge_messages = [{"role": "user", "content": judge_prompt}]
+judge_scores = None
+judge_content = ""
+
+for attempt in range(1, 4):
+    judge_response = client.chat.completions.create(model=MODEL, messages=judge_messages)
+    if judge_response.choices:
+        judge_content = judge_response.choices[0].message.content or ""
+    else:
+        judge_content = ""
+    judge_scores = extract_json_scores(judge_content)
+    if judge_scores:
+        break
+    judge_messages.append({"role": "assistant", "content": judge_content})
+    judge_messages.append({
+        "role": "user",
+        "content": "Your previous response was not valid JSON. Reply with ONLY a compact JSON object and nothing else, using exactly these keys: {\"coverage\": <int 1-5>, \"accuracy\": <int 1-5>, \"completeness\": <int 1-5>, \"format\": <int 1-5>, \"overall\": <int 1-5>}",
+    })
+
+print("=" * 50)
+print("LLM JUDGE EVALUATION")
+print("=" * 50)
+if judge_scores:
+    print(json.dumps(judge_scores, indent=2))
+else:
+    print(f"Judge did not return valid JSON after retries:\n{judge_content}")
 ```
 
 LLMs may still wrap or pad the response with prose, so always parse the output defensively — try `json.loads()` first, then fall back to a regex extraction of the JSON object. If the response contains no JSON at all, re-prompt the judge to return strict JSON and retry a couple of times.

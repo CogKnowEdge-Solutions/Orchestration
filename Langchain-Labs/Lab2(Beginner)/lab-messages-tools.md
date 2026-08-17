@@ -300,6 +300,7 @@ Pinning exact versions (`==1.2.15`, not `>=1.2.15`) means the lab behaves the sa
 When it finishes, the final line should read `Successfully installed ...`. If you already ran the Section 9 setup, you'll instead see `Requirement already satisfied` lines — that's fine, either outcome is success.
 
 ```python
+# One command installs all required modules (versions pinned for reproducibility)
 !pip install -qU "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2"
 ```
 
@@ -316,8 +317,10 @@ The cell should produce no output at all — that's the success signal. If the k
 import os
 from dotenv import load_dotenv
 
+# Read the OPENROUTER_API_KEY we saved in .env (Section 9 of the guide)
 load_dotenv()
 
+# Stop early with a clear message if the key is missing
 if not os.getenv("OPENROUTER_API_KEY"):
     raise SystemExit("No OPENROUTER_API_KEY found. Add it to .env and restart the kernel.")
 ```

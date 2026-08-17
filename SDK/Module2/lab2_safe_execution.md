@@ -426,6 +426,8 @@ The Agent SDK automatically handles:
 - Blocking or allowing actions based on your callback's return value
 
 ```python
+# Configure the agent with execution tools and a can_use_tool callback
+# The can_use_tool callback gates destructive actions on human approval
 from claude_agent_sdk import ClaudeAgentOptions, query
 
 async def can_use_tool(tool_name: str, input_data: dict, context):
@@ -552,21 +554,23 @@ async def prompt_stream():
     }
 
 async def run_agent():
-    result = ""
-    async for message in query(
-        prompt=prompt_stream(),
-        options=options
-    ):
+    response = ""
+    async for message in query(prompt=prompt_stream(), options=options):
         if hasattr(message, 'content'):
-            result = message.content
-        if hasattr(message, 'result') and message.result:
-            result = message.result
-    return result
+            content = message.content
+            if isinstance(content, list):
+                texts = [getattr(b, 'text', str(b)) for b in content]
+                response = "\n".join(texts)
+            else:
+                response = content
+        if hasattr(message, "result") and message.result:
+            response = message.result
+    return response
 
 # Use await in Jupyter (already has event loop)
 response = await run_agent()
 
-print("\\n--- Agent Response ---\\n")
+print("\n--- Agent Response ---\n")
 print(response)
 ```
 

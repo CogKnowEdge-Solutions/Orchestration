@@ -202,7 +202,7 @@ Install required dependencies using `uv` (recommended) or `pip`:
 | `python-dotenv` | Loads environment variables from `.env` files |
 
 ```python
-# Install dependencies using uv (or fallback to standard pip)
+# Install dependencies using uv (recommended for speed) or pip
 !uv pip install -q claude-agent-sdk rich python-dotenv || pip install -q claude-agent-sdk rich python-dotenv
 ```
 
@@ -217,6 +217,8 @@ from dotenv import load_dotenv
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, ResultMessage
 from rich.console import Console
 from rich.markdown import Markdown
+
+print("SDK and utility imports successful.")
 ```
 
 ## Configure Anthropic API Key
@@ -228,9 +230,11 @@ load_dotenv()
 
 api_key = os.getenv("ANTHROPIC_API_KEY")
 if not api_key:
-    raise ValueError("ANTHROPIC_API_KEY environment variable is missing.")
-
-print("Anthropic API key successfully loaded.")
+    print("WARNING: ANTHROPIC_API_KEY environment variable is missing.")
+    print("Please set ANTHROPIC_API_KEY in your environment or .env file before making query() calls.")
+else:
+    masked = api_key[:7] + "..." + api_key[-4:] if len(api_key) > 11 else "***"
+    print(f"Anthropic API key successfully loaded: {masked}")
 ```
 
 ---
@@ -255,7 +259,8 @@ options = ClaudeAgentOptions(
 
 console = Console()
 console.print("[bold green]Agent options initialized.[/bold green]")
-console.print(f"Allowed tools: {options.allowed_tools}")
+console.print(f"Target Directory: [cyan]{TARGET_DIR}[/cyan]")
+console.print(f"Allowed tools whitelist: [yellow]{options.allowed_tools}[/yellow]")
 ```
 
 ---
@@ -265,8 +270,6 @@ console.print(f"Allowed tools: {options.allowed_tools}")
 Specify the natural-language task prompt. High-quality prompts describe the desired objective, required constraints, and output structure clearly while leaving execution strategy to the model.
 
 ```python
-TARGET_DIR = "data"
-
 TASK = f"""
 Scan the codebase located at '{TARGET_DIR}' and identify all TODO and FIXME comments.
 
@@ -278,6 +281,11 @@ For each match, detail:
 
 Organize output into a clean markdown document grouped by file.
 """
+
+print("Task prompt defined:")
+print("-" * 50)
+print(TASK.strip())
+print("-" * 50)
 ```
 
 ---
@@ -311,16 +319,39 @@ flowchart LR
 ```python
 async def execute_audit(task_prompt: str, agent_options: ClaudeAgentOptions) -> str:
     final_output = ""
+    console.print("[bold blue]Starting agent loop via query()...[/bold blue]")
+
     async for message in query(prompt=task_prompt, options=agent_options):
+        # Live progress: print what Claude is doing each turn
+        if isinstance(message, AssistantMessage):
+            tool_calls = [
+                block.name
+                for block in message.content
+                if hasattr(block, "type") and block.type == "tool_use"
+            ]
+            if tool_calls:
+                console.print(f"[dim]  → Tool calls requested: {', '.join(tool_calls)}[/dim]")
+
+        # Final result: check subtype before accessing .result
         if isinstance(message, ResultMessage):
             if message.subtype == "success":
-                final_output = message.result
+                # .result is only present on the success variant
+                final_output = message.result or ""
+                console.print("[bold green]✓ Execution completed successfully.[/bold green]")
             else:
                 final_output = f"Execution stopped with status: {message.subtype}"
+                console.print(f"[bold red]✗ Execution stopped: {message.subtype}[/bold red]")
+
     return final_output
 
-# Execute the asynchronous query loop
-response_text = asyncio.run(execute_audit(TASK, options))
+
+# Execute the asynchronous query loop in a worker thread with subprocess support
+try:
+    # In Jupyter, await the async function directly (avoid asyncio.run in a worker thread)
+    response_text = await execute_audit(TASK, options)
+except Exception as e:
+    response_text = f"Execution failed: {e}"
+    console.print(f"[bold red]✗ Execution failed: {e}[/bold red]")
 
 console.print("\n[bold cyan]--- Agent Response ---[/bold cyan]\n")
 console.print(Markdown(response_text))
@@ -336,7 +367,7 @@ Persist the generated audit report to a local file.
 REPORT_PATH = "todo_fixme_report.md"
 
 with open(REPORT_PATH, "w", encoding="utf-8") as f:
-    f.write(f"# Codebase TODO / FIXME Audit\n\n")
+    f.write("# Codebase TODO / FIXME Audit Report\n\n")
     f.write(f"Target directory: `{TARGET_DIR}`\n\n")
     f.write(response_text)
 
