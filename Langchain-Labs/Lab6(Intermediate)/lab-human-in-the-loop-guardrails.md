@@ -350,6 +350,8 @@ Expect four messages: your request, the model's tool call, the tool's "Transferr
 A **guardrail** is a constraint that runs automatically, in code, before the agent acts — no human in the middle. The first one blocks **prompt injection**, the attack where a user tries to override the system prompt ("ignore previous instructions..."). `INJECTION_PHRASES` is the rule set the guard checks. The guard itself is a `before_model` hook (from Lab 5): it inspects the newest human message before every model call, and on a match returns a state update that **jumps the run to the end** with a fixed refusal message. `hook_config(can_jump_to=["end"])` declares the jump — the same mechanism the built-in call-limit middleware uses — and `AIMessage` constructs the refusal. Because the hook fires *before* the model, a blocked attack costs zero model calls.
 
 ```python
+# hook_config: decorator helper that declares which loop nodes a hook can jump to
+# (e.g., can_jump_to=["end"] lets a hook abort the run without calling the model)
 from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
 from langchain_core.messages import AIMessage
 from langgraph.runtime import Runtime
@@ -421,6 +423,12 @@ Expect the balance to still work and the transfer attempt to be refused or expla
 Guardrails are automatic; **human-in-the-loop** (HITL) is the opposite: a *person* decides before a high-risk action executes. `HumanInTheLoopMiddleware` does this with a two-phase run. Phase 1: when the model asks for a tool that is listed in `interrupt_on`, the run **pauses** instead of executing — it returns control to your code with everything the human needs to decide (`allowed_decisions` and a `description`). Phase 2: your code resumes with the human's decision. Tools *not* listed are auto-approved, so `get_balance` stays frictionless while `transfer_money` waits. The pause requires a **checkpointer** — a store that saves the graph's state at the interrupt — and `MemorySaver()` keeps that state in RAM (a production system would use a database). `Command` is the resume type.
 
 ```python
+# HumanInTheLoopMiddleware: pauses the agent loop when a listed tool is requested,
+# returning control to your code so a human can approve, edit, or reject the action.
+# InterruptOnConfig: per-tool config that specifies allowed_decisions and a description
+# shown to the human. MemorySaver: in-memory checkpointer that saves graph state at the
+# interrupt point so the run can be resumed later. Command: the resume payload you send
+# back to wake the paused loop with the human's decision.
 from langchain.agents.middleware import HumanInTheLoopMiddleware, InterruptOnConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command

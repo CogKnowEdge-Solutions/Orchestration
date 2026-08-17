@@ -266,7 +266,11 @@ model = ChatOpenAI(
 Two pieces come together here. The **prompt** is a template: a fixed system instruction, a `history` slot, and the current `{input}`. The `MessagesPlaceholder("history")` is the seam — it says "inject the conversation here as a list of messages," and its name must match the `history_messages_key` we pass in Step 5. The **store** is a plain dict from session ID to a `ChatMessageHistory` object, and `get_session_history` is the callback the wrapper will call to load or create history for the active session. `dict.setdefault` returns the existing object if present, or creates, stores, and returns a new one — one idiomatic line instead of three.
 
 ```python
+# InMemoryChatMessageHistory: an in-memory list of messages keyed by session_id —
+# the simplest persistence layer for conversation history
 from langchain_core.chat_history import InMemoryChatMessageHistory
+# ChatPromptTemplate: a template with named slots ({input}, system text, etc.);
+# MessagesPlaceholder("history") injects a list of past messages at that position
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 prompt = ChatPromptTemplate.from_messages([
@@ -286,6 +290,9 @@ def get_session_history(session_id):
 Now the stateless `prompt | model` chain becomes session-aware. `RunnableWithMessageHistory` wraps it and, on every call, performs the load → inject → call → append loop from Section 7. `input_messages_key="input"` and `history_messages_key="history"` tell it which prompt variables hold the new text and the replayed history. The chain itself is unchanged — the wrapper is what adds memory.
 
 ```python
+# Wraps any prompt|model chain to automatically load history before each call
+# and append the new exchange after — the piece that turns a stateless chain into a
+# session-aware chatbot
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 chain = prompt | model

@@ -224,10 +224,18 @@ from dotenv import load_dotenv
 load_dotenv(pathlib.Path(".env"))
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
+# BaseCallbackHandler: subclass it and override hooks (on_llm_start, on_llm_end, etc.)
+# to observe or modify every LLM call — here used to capture prompt_tokens per call
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain.agents import create_agent
+# MemorySaver: in-memory checkpointer that persists graph state keyed by thread_id,
+# so a run can be paused (interrupt) and resumed later from the exact same spot
 from langgraph.checkpoint.memory import MemorySaver
+# Command: the resume payload sent back to a paused graph — e.g. Command(resume="proceed")
+# wakes the loop that was parked at an interrupt_before / interrupt_after node
 from langgraph.types import Command
+# GraphRecursionError: raised when the agent loop exceeds its recursion_limit —
+# the hard cap that prevents infinite retry storms on failing tools
 from langgraph.errors import GraphRecursionError
 
 def model():

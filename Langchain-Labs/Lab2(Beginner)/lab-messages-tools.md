@@ -335,6 +335,8 @@ Now the first building block. We create one instance of each of the four message
 The `for` loop prints every message's `type` and `content`, side by side, so you can see the whole roster at once. Expect four lines, one per message, like the sample in Section 5.
 
 ```python
+# The four message types: SystemMessage (rules), HumanMessage (user input),
+# AIMessage (model output), ToolMessage (tool result linked by tool_call_id)
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 
 # Each message type plays one role in the conversation
@@ -421,6 +423,8 @@ Here's the payoff of Step 6. The model can't read your Python code — so LangCh
 Compare the printed schema to the function it came from: same information, but as a JSON-style description instead of code. This is exactly the description traveling to the model when the agent runs. If you ever change a docstring or a type hint, this schema is what changes too — which is why good docstrings matter so much.
 
 ```python
+# Converts a Python function into an OpenAI-compatible function-calling schema
+# (JSON with name, description, parameters) — the format models use to request tool calls
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 # Build the schema for each tool and print what the model actually sees

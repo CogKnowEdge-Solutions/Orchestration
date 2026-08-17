@@ -243,6 +243,9 @@ The `@mcp.tool()` decorator registers the function as a tool: the docstring beco
 import sys
 from pathlib import Path
 
+# MultiServerMCPClient: connects to one or more MCP servers over stdio or HTTP,
+# lists their tools via the MCP protocol, and returns them as LangChain BaseTool
+# objects — the bridge that lets create_agent use MCP tools like any other tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 Path("notes.json").unlink(missing_ok=True)  # start from a clean notes store

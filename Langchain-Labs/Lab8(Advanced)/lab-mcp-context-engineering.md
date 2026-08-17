@@ -211,6 +211,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
+# BaseCallbackHandler: subclass it and override hooks (on_llm_start, on_llm_end, etc.)
+# to observe or modify every LLM call in a run — here used to capture prompt_tokens
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI

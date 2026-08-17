@@ -302,6 +302,8 @@ Expect a one-line greeting and `Total messages in state: 2` (your turn plus the 
 Drop in your first guardrail. `PIIMiddleware("email", strategy="redact", apply_to_input=True)` attaches a `before_model` hook that scans the newest human message, replaces any detected email with `[REDACTED_EMAIL]`, and hands the sanitized state to the model — the model never sees the raw address. Two agents are built: `pii_redact` scrubs and continues; `pii_block` uses `strategy="block"`, which *raises* `PIIDetectionError` in `before_model` instead of continuing — the whole run is refused before a single model call, the right behavior for a hard compliance rule.
 
 ```python
+# PIIMiddleware: prebuilt middleware that scans messages for PII (emails, SSNs, etc.)
+# and either redacts or blocks; PIIDetectionError is raised when strategy="block"
 from langchain.agents.middleware import PIIMiddleware, PIIDetectionError
 
 pii_redact = create_agent(
@@ -376,6 +378,10 @@ Expect four messages: your question, the model's (empty-content) tool request, t
 Now you write middleware, not just configure it. Subclass `AgentMiddleware` and override hooks. `before_model` runs before each model call and here prints how many messages the model is about to see; `after_model` runs right after and prints the reply. Both return `None` (no state change) — pure observation. This is the minimal custom middleware, and it is also the tool you'll reach for whenever the loop feels like a black box.
 
 ```python
+# AgentMiddleware: base class for custom middleware — subclass it and override hooks
+# (before_model, after_model, wrap_model_call) to inspect or modify the loop
+# AgentState: the typed dict the graph passes between nodes (contains "messages")
+# Runtime:LangGraph's per-run context object passed to every hook
 from langchain.agents.middleware import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
@@ -411,6 +417,8 @@ Node hooks see state; wrap hooks *surround the call*. `wrap_model_call(request, 
 ```python
 import time
 from collections.abc import Callable
+# ModelRequest / ModelResponse: the data objects passed through wrap_model_call —
+# ModelRequest carries the messages and config, ModelResponse carries the LLM's reply
 from langchain.agents.middleware import ModelRequest, ModelResponse
 
 class TimingMiddleware(AgentMiddleware):
@@ -444,6 +452,8 @@ Expect a line like `[wrap_model_call] model call took 8.32 seconds` (free-tier m
 For a single small hook, the decorators `@before_model` and `@after_model` turn a plain function into middleware — no class boilerplate. The decorated function has the same signature as the hook methods: `(state, runtime)`, returning a state-update dict or `None`. Both decorated functions are then passed in the same `middleware=[...]` list, mixed freely.
 
 ```python
+# Decorator-style hooks: @before_model and @after_model turn a plain function
+# into middleware without subclassing AgentMiddleware — same (state, runtime) signature
 from langchain.agents.middleware import before_model, after_model
 
 @before_model
