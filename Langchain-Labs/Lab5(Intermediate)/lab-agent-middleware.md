@@ -340,6 +340,8 @@ Expect the reply to reference `[REDACTED_EMAIL]`, the "saw" line to show `'My em
 
 The second guardrail is a budget. `ModelCallLimitMiddleware(run_limit=1)` adds hooks that count model calls per run and, when the count is already at the limit, jump the loop straight to the end with a "limit exceeded" message instead of making another call. To make the limit *bite*, the agent needs a reason to call the model twice, so a trivial `get_weather` tool is added and the system prompt tells the agent to use it. A run therefore takes one model → tool → model round trip: the first model call asks for the tool, and the second — the one that would produce the final answer — is the one the budget blocks.
 
+The `@tool` decorator (from `langchain.tools`) turns a plain Python function into a **LangChain tool** — an object the agent can discover, describe to the model, and invoke at runtime. Under the hood it reads the function's name, docstring, and type-annotated signature and converts them into an OpenAI-compatible function schema (a JSON object with a name, description, and parameter definitions). When you pass the decorated function to `create_agent(tools=[...])`, the agent loop registers that schema alongside any other tools, and the model uses it to decide *when* and *how* to call the function. The function body runs normally; the decorator is purely about making the function visible to the LLM as a callable tool.
+
 ```python
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.tools import tool
