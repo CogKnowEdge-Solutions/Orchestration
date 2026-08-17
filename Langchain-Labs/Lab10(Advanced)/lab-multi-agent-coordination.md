@@ -10,6 +10,67 @@
 
 ---
 
+## Orchestrator-Worker Routing
+
+In a single-agent architecture, one model holds every tool and every rule. That works for a chatbot with five tools. It breaks for a support desk with six tools across three departments, because every ticket pays the full schema cost of all six tools — even when only two are relevant — and the system prompt must be generic enough to cover billing, tech, and accounts in one shot.
+
+**Orchestrator-worker routing** solves this by splitting the desk into two layers:
+
+1. **The orchestrator (supervisor)** — a lightweight node whose only job is to *classify* an incoming ticket and say *who handles it next*. It is not a full agent; it has no domain tools. It binds one tiny route tool per department (`route_billing`, `route_tech`, `route_account`), reads the ticket, and returns a `Command(goto="billing")` that jumps the graph to the right specialist. The routing call is the cheapest call in the system: three short schemas, a small prompt, ~445 tokens regardless of how many departments exist.
+
+2. **The specialists** — each is a full `create_agent` with its own system prompt and only its own two tools. A billing agent never sees the `check_service_status` schema; a tech agent never sees `process_refund`. Each specialist's context is bounded to its department, and adding a new department means adding one route tool to the supervisor and one isolated agent — not growing every ticket's context.
+
+The result is a star topology: the supervisor at the center, specialists at the edges. Every ticket passes through exactly two model calls (route + act), but each call carries only the context it needs.
+
+```mermaid
+graph TD
+    T["Incoming ticket"] --> S
+    S["Supervisor<br/>(3 route tools, small prompt)"]
+    S -->|route_billing| B["Billing agent<br/>(get_invoice, process_refund)"]
+    S -->|route_tech| TE["Tech agent<br/>(check_service_status, search_kb)"]
+    S -->|route_account| A["Account agent<br/>(get_plan, set_seats)"]
+    B --> E["Resolution"]
+    TE --> E
+    A --> E
+
+    style S fill:#fff9c4,stroke:#f9a825,color:#1a1a1a
+    style B fill:#e1f5ff,stroke:#1565c0,color:#1a1a1a
+    style TE fill:#e1f5ff,stroke:#1565c0,color:#1a1a1a
+    style A fill:#e1f5ff,stroke:#1565c0,color:#1a1a1a
+```
+
+The tradeoff is honest: the single-agent baseline makes one call per ticket; the multi-agent run makes two. The supervisor is overhead. But the supervisor's call is cheap (small context), each specialist's call is cheap (focused context), and the architecture scales linearly — a fourth department costs ~30 tokens on the router and one new agent, not six new tool schemas on every ticket.
+
+## Specialist Handoffs
+
+Routing gets a ticket to the right *first* department. But real tickets cross boundaries: a billing complaint about a duplicate charge turns out to be an API outage causing double-processing. The specialist that starts the ticket recognises the real problem belongs elsewhere and needs to hand off responsibility to a peer.
+
+**Specialist handoff** is the escalation mechanism. Mechanically it is one trick: each specialist is given `transfer_to_*` tools — one per peer department — and when the specialist calls one, the tool returns `Command(goto="tech", graph=Command.PARENT)`. The `PARENT` keyword is critical: it tells LangGraph to jump in *the desk graph* (the supervisor's graph), not inside the specialist's own agent loop. Without it, the jump would stay inside the specialist and the other specialist would never see it.
+
+The handoff flow looks like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant S as Supervisor
+    participant B as Billing agent
+    participant T as Tech agent
+
+    C->>S: "Enterprise plan, API returning 503s, want a refund"
+    S->>B: Command(goto=billing)
+    Note over B: Reads ticket — refund ask<br/>but real issue is service
+    B->>T: transfer_to_tech →<br/>Command(goto=tech, graph=PARENT)
+    Note over T: Checks service status,<br/>finds outage, resolves
+    T-->>C: "API gateway is degraded.<br/>Billing will follow up on refund."
+```
+
+Two design details make this robust:
+
+- **The handoff budget.** A module-level counter (starting at 1) is decremented by every transfer. If a second transfer is attempted, the tool returns plain text ("resolve it yourself") instead of another `Command`. Without this guard, a ticket that genuinely spans three departments could ping-pong forever — the handoff equivalent of Lab 9's unbounded retry loop.
+- **The contract is the ticket, not the history.** The receiving specialist sees the original request and the messages in the shared state, not the transferring specialist's internal reasoning. This keeps each specialist's context small and makes the handoff a handoff of *responsibility*, not of every byte of conversation.
+
+---
+
 ## 2. Problem Statement / Use Case Overview
 
 Every support desk that processes tickets has the same routing problem: *who handles this one?* Real systems — Zendesk's auto-assignment, Intercom's Fin, any enterprise queue — do not run one giant agent. They run a set of specialists with a routing layer in front, because one agent holding every department's tools and every department's rules stops scaling the moment the company adds a fourth team.
