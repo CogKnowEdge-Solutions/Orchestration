@@ -1,7 +1,7 @@
 # Lab 12: Capstone Project — Intelligent Financial Advisory Platform
 
-**Difficulty: Advanced Capstone | Applied Research | Graduate Level**  
-**Duration: 90 min (implementation) + 2 weeks (proposal → milestones → submission)**  
+**Difficulty: Advanced Capstone | Applied Research | Graduate Level**
+**Duration: 90 min (implementation) + 2 weeks (proposal → milestones → submission)**
 **Requires: Labs 1-11 | Real-world finance applications**
 
 ---
@@ -24,7 +24,92 @@ By the end, you will have built a system that real-world fintech companies use: 
 
 ---
 
-## 3. Input Data
+## 3. Project Structure
+
+Unlike Labs 1-11 (which use a single notebook), this capstone is a **full project**. You build a directory of files, not a single `.ipynb`. The structure below is a starting point — **adapt it to your understanding, the problem you choose, and how you like to organize code.** There is no single right structure.
+
+```
+langchain-capstone/
+│
+├── README.md                      # Project overview, setup instructions, objectives
+├── requirements.txt                # langchain, langchain-community, openai/anthropic sdk, etc.
+├── .env.example                    # Template for API keys (never commit real .env)
+├── .gitignore
+│
+├── docs/
+│   ├── project_brief.md            # Problem statement, goals, success criteria
+│   ├── architecture.md             # System design, chain/agent flow diagrams
+│   └── rubric.md                   # Grading criteria / evaluation checklist
+│
+├── src/
+│   ├── __init__.py
+│   ├── config.py                   # Model configs, env var loading
+│   │
+│   ├── chains/
+│   │   ├── __init__.py
+│   │   ├── prompt_templates.py     # Reusable PromptTemplate / ChatPromptTemplate defs
+│   │   └── core_chain.py           # Main LCEL chain definition
+│   │
+│   ├── memory/
+│   │   ├── __init__.py
+│   │   └── conversation_memory.py  # Memory setup (buffer, summary, etc.)
+│   │
+│   ├── retrieval/
+│   │   ├── __init__.py
+│   │   ├── loaders.py              # Document loaders
+│   │   ├── vectorstore.py          # Embeddings + vector DB setup
+│   │   └── retriever.py            # Retriever + RAG chain
+│   │
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── tools.py                # Custom tool definitions
+│   │   └── agent_executor.py       # Agent setup + tool binding
+│   │
+│   └── utils/
+│       ├── __init__.py
+│       └── helpers.py              # Logging, formatting, error handling
+│
+├── data/
+│   ├── raw/                        # Source documents for RAG
+│   └── processed/                  # Chunked/cleaned data, cached embeddings
+│
+├── notebooks/
+│   └── exploration.ipynb           # Prototyping / experimentation
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_chains.py
+│   ├── test_retrieval.py
+│   └── test_agents.py
+│
+├── app.py                          # Entry point (CLI, Streamlit, or FastAPI app)
+│
+└── submission/
+    ├── demo_video_link.md          # Or embedded demo instructions
+    └── reflection.md               # Student write-up: challenges, learnings
+```
+
+> **Note:** This structure is a suggestion, not a requirement. If you are building a simpler project (e.g., a single RAG pipeline), you do not need `agents/`, `memory/`, or `retrieval/` subdirectories — put everything in `src/` directly. If you are building something more complex, add folders as needed. The key is that someone else can understand your project by reading your `README.md` and looking at the folder names.
+
+### What each folder/file is for
+
+| Path | Purpose |
+|------|---------|
+| `README.md` | The front door. Explains what the project does, how to set it up, and how to run it. Write this last. |
+| `requirements.txt` | Pinned dependencies. `pip install -r requirements.txt` should set up everything. |
+| `.env.example` | Shows which API keys are needed without exposing real ones. |
+| `.gitignore` | Keeps `.env`, `__pycache__/`, `.venv/`, and large data files out of git. |
+| `docs/` | Design documents. `project_brief.md` is your problem statement; `architecture.md` has your system diagrams; `rubric.md` is how you evaluate success. |
+| `src/` | All production code. Split into subdirectories by concern (`chains/`, `memory/`, `retrieval/`, `agents/`, `utils/`). Each subdirectory has an `__init__.py`. |
+| `data/` | Source documents (`raw/`) and processed/cached data (`processed/`). Never commit large files — use `.gitignore` or Git LFS. |
+| `notebooks/` | Scratch space for prototyping. Code that works here gets moved to `src/` when it is ready. |
+| `tests/` | One test file per module. `pytest` is the standard runner. |
+| `app.py` | The entry point. Could be a CLI, a Streamlit dashboard, a FastAPI server, or a simple script — depends on your project. |
+| `submission/` | What you hand in. `reflection.md` is your write-up (what worked, what broke, what you learned). `demo_video_link.md` is a link to a 3-5 minute demo video or written walkthrough. |
+
+---
+
+## 4. Input Data
 
 All synthetic, deterministic, reproducible:
 
@@ -37,21 +122,21 @@ All synthetic, deterministic, reproducible:
 
 ---
 
-## 4. Processing
+## 5. Processing
 
 The system runs in five phases for each client query:
 
 1. **Load client profile** — long-term memory store (Lab 11) retrieves all prior conversations, goals, and preferences.
 2. **Classify the question** — supervisor reads the query and routes to Tax Advisor, Investment Strategist, or Retirement Planner (Lab 10).
-3. **Retrieve knowledge** — specialist pulls relevant docs from regulatory KB (Labs 3–4); calls market data API for stock/fund info (Lab 5).
-4. **Generate advice** — specialist reasons through multi-step logic (compare strategies, check limits, flag risks) (Labs 7–8).
+3. **Retrieve knowledge** — specialist pulls relevant docs from regulatory KB (Labs 3-4); calls market data API for stock/fund info (Lab 5).
+4. **Generate advice** — specialist reasons through multi-step logic (compare strategies, check limits, flag risks) (Labs 7-8).
 5. **Log & update** — recommendation is logged to compliance ledger, new facts are stored to client profile (Lab 11).
 
 Three runs: a tax question, an investment question, and a retirement planning question with potential cross-advisor handoff.
 
 ---
 
-## 5. Output
+## 6. Output
 
 Four artifacts plus compliance ledger and analysis:
 
@@ -115,7 +200,7 @@ compliance_log: handoff recorded, both advisors' recommendations logged
 
 ---
 
-## 6. Tech Stack
+## 7. Tech Stack
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
@@ -135,13 +220,13 @@ compliance_log: handoff recorded, both advisors' recommendations logged
 
 ---
 
-## 7. Underlying Concepts
+## 8. Underlying Concepts
 
-This capstone integrates every Lab 1–11 concept, applied to real finance:
+This capstone integrates every Lab 1-11 concept, applied to real finance:
 
 - **Lab 1 (Agents & Models)** — Model factory; LLM is the reasoning engine
 - **Lab 2 (Prompts & Chains)** — System prompts for each advisor specialty
-- **Lab 3–4 (Retrieval & RAG)** — Knowledge base of tax rules, investment strategies
+- **Lab 3-4 (Retrieval & RAG)** — Knowledge base of tax rules, investment strategies
 - **Lab 5 (Agent Loop)** — Advisors loop over data-fetch and reasoning tools
 - **Lab 6 (Tools & Callbacks)** — Market API, portfolio tools, UsageCapture for cost tracking
 - **Lab 7 (Multi-Step)** — Complex reasoning: check bracket → compare strategies → recommend
@@ -158,9 +243,9 @@ This capstone integrates every Lab 1–11 concept, applied to real finance:
 
 ---
 
-## 8. Prerequisites
+## 9. Prerequisites
 
-- **Labs 1–11** (required) — each concept is used
+- **Labs 1-11** (required) — each concept is used
 - **OpenRouter API key** in `.env` (free tier sufficient; ~25 calls)
 - **Finance literacy** — understand tax brackets, asset allocation, 401k vs Roth (taught in lab)
 - **Python 3.11+**, pinned packages, a text editor
@@ -168,7 +253,7 @@ This capstone integrates every Lab 1–11 concept, applied to real finance:
 
 ---
 
-## 9. Environment / Dependencies Setup
+## 10. Environment / Dependencies Setup
 
 ```bash
 python3 -m venv .venv
@@ -186,35 +271,85 @@ cp .env.example .env
 
 ---
 
-## 10. Step-wise Development Instructions
+## 11. Development Guide
 
-The notebook has 12 code cells:
+This is not a step-by-step notebook. You are building a project. Below is the recommended order of work — adapt it to your pace.
 
-**Step 1–2.** Install, import (StateGraph, Command, Runtime, InMemoryStore, MemorySaver, tool, create_agent).
+### Phase 1: Foundation (Day 1-2)
 
-**Step 3.** Financial knowledge base — 10 documents on tax rules, 401k limits, asset allocation, RMD rules, etc.
+| Task | What to build | Labs used |
+|------|--------------|-----------|
+| Set up project structure | Create the directory tree, `requirements.txt`, `.env.example`, `.gitignore` | — |
+| Config module | `src/config.py` — load env vars, model factory | Lab 1 |
+| Knowledge base | `data/raw/` — 10+ documents on tax rules, 401k limits, asset allocation | Lab 3 |
+| Document loaders | `src/retrieval/loaders.py` — load and chunk the KB | Lab 3 |
+| Vector store | `src/retrieval/vectorstore.py` — embeddings + vector DB | Lab 4 |
 
-**Step 4.** Client data & long-term memory store — three clients with profiles (age, income, goals).
+### Phase 2: Core Agent (Day 3-5)
 
-**Step 5.** Market data mock — function returning stock prices, fund returns.
+| Task | What to build | Labs used |
+|------|--------------|-----------|
+| Tool definitions | `src/agents/tools.py` — get_client_profile, check_tax_bracket, search_kb, etc. | Lab 2, 6 |
+| Prompt templates | `src/chains/prompt_templates.py` — system prompts for each advisor | Lab 2 |
+| Single advisor agent | `src/agents/agent_executor.py` — one specialist with its tools | Lab 1, 5 |
+| Memory setup | `src/memory/conversation_memory.py` — checkpointer + store | Lab 11 |
+| Test single agent | `notebooks/exploration.ipynb` — prototype one advisor end-to-end | All |
 
-**Step 6.** Advisor tools — get_client_profile, check_tax_bracket, get_portfolio_snapshot, search_kb, fetch_market_data, log_recommendation.
+### Phase 3: Multi-Agent (Day 6-8)
 
-**Step 7.** Supervisor & three advisors — Tax Advisor, Investment Strategist, Retirement Planner (each a create_agent with own tools).
+| Task | What to build | Labs used |
+|------|--------------|-----------|
+| Supervisor | Route tool definitions + routing logic | Lab 10 |
+| Three specialists | Tax, Investment, Retirement — each with own tools and prompt | Lab 10 |
+| Handoff tools | transfer_to_* with budget guard | Lab 10 |
+| Graph assembly | `build_desk()` — wire supervisor → specialists → END | Lab 10 |
+| Runtime context | `Runtime[Client]` for per-client memory injection | Lab 9, 11 |
 
-**Step 8.** Handoff tools — transfer_to_tax_advisor, transfer_to_investment_strategist, etc. (with budget guard).
+### Phase 4: Compliance & Polish (Day 9-10)
 
-**Step 9.** Compliance logger — log_recommendation tool, writing to audit trail.
+| Task | What to build | Labs used |
+|------|--------------|-----------|
+| Compliance logger | `log_recommendation` tool, audit trail storage | Lab 6 |
+| Token tracking | UsageCapture per advisor, cost breakdown | Lab 8 |
+| Error handling | `src/utils/helpers.py` — retries, fallbacks, logging | Lab 7 |
+| Tests | `tests/test_*.py` — unit tests for chains, retrieval, agents | — |
+| README | `README.md` — overview, setup, how to run | — |
 
-**Step 10.** Graph & runtime — START → load_client_memory → supervisor → advisors → log_recommendation → END.
+### Phase 5: Submission (Day 11-14)
 
-**Step 11.** Three query runs — tax question, investment question, cross-advisor scenario.
-
-**Step 12.** Ledger — print compliance log, token counts, cost breakdown per advisor.
+| Task | What to deliver | Where |
+|------|----------------|-------|
+| Demo video | 3-5 minute walkthrough of the system working | `submission/demo_video_link.md` |
+| Reflection | Write-up: challenges, design decisions, what you learned | `submission/reflection.md` |
+| Architecture diagram | Mermaid or hand-drawn system flow | `docs/architecture.md` |
+| Final code | Clean, documented, all tests passing | Entire project |
 
 ---
 
-## 11. Optional Exercise
+## 12. Marking Breakdown
+
+| Criterion | Weight | What is evaluated |
+|-----------|--------|-------------------|
+| **Architecture & Design** | 25% | Clean project structure, separation of concerns, sensible module boundaries. Does the folder layout make sense? Could someone else navigate the code? |
+| **Agent Functionality** | 25% | Multi-agent routing works correctly. Specialists answer their domain. Handoffs execute properly. Token budgets are enforced. |
+| **Memory & Retrieval** | 20% | Long-term memory persists across sessions. Knowledge base retrieval returns relevant docs. RAG pipeline grounds answers in real data. |
+| **Compliance & Logging** | 15% | Every recommendation is logged with timestamp, client ID, data sources, and token count. Audit trail is complete and auditable. |
+| **Code Quality** | 10% | Clean code, docstrings, type hints, error handling. No hardcoded secrets. `.env` for API keys. |
+| **Documentation & Demo** | 5% | README is clear. Architecture diagram is accurate. Demo video shows the system working end-to-end. Reflection is honest and specific. |
+
+### Grading Bands
+
+| Score | Band | Description |
+|-------|------|-------------|
+| 90-100 | Distinction | Production-quality code, all agents work, memory persists, compliance is complete, excellent documentation |
+| 75-89 | Merit | Working system with minor issues (e.g., one agent occasionally fails, memory has edge cases), good documentation |
+| 60-74 | Pass | Core functionality works (routing + at least one specialist), basic memory, partial compliance, adequate docs |
+| 50-59 | Borderline | Partial implementation (e.g., single agent only, no routing), memory or retrieval incomplete |
+| Below 50 | Fail | Does not demonstrate understanding of Labs 1-11 concepts in an integrated system |
+
+---
+
+## 13. Optional Exercise
 
 **Add a fourth advisor: Risk Manager**
 
@@ -227,7 +362,7 @@ Pre-route queries containing "risk" to Risk Manager first; if identified, handof
 
 ---
 
-## 12. What We Learnt
+## 14. What We Learnt
 
 - **Finance needs specialization** — one model cannot advise reliably on tax AND investments; routing matters.
 - **Compliance is data** — every recommendation must be traceable: who, when, what data, what logic.
@@ -258,22 +393,22 @@ graph TD
     CQ["Client Query<br/>+ Client ID"]
     LM["load_client_memory<br/>Retrieve profile from store"]
     S["Supervisor<br/>3 route tools<br/>~445 tokens"]
-    
+
     RT["route_tax"]
     RI["route_investment"]
     RR["route_retirement"]
-    
+
     TA["Tax Advisor<br/>~300 tokens"]
     IA["Investment Strategist<br/>~380 tokens"]
     RA["Retirement Planner<br/>~350 tokens"]
     RM["Risk Manager<br/>optional"]
-    
+
     KB["KB Retrieval<br/>Tax rules, strategies"]
     API["Market Data API<br/>Prices, returns"]
-    
+
     LOG["log_recommendation<br/>Compliance audit trail"]
     END["END"]
-    
+
     CQ --> LM
     LM --> S
     S -->|RT| TA
@@ -290,7 +425,7 @@ graph TD
     RA --> LOG
     RM -.->|optional| LOG
     LOG --> END
-    
+
     style LM fill:#fff9c4,color:#1a1a1a
     style S fill:#fff9c4,color:#1a1a1a
     style TA fill:#e1f5ff,color:#1a1a1a
