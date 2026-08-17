@@ -278,7 +278,12 @@ prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder("history"),
     ("human", "{input}"),
 ])
+```
 
+The store maps session IDs to history objects — one per user:
+
+```python
+# A plain dict maps session IDs to their history objects
 store = {}
 
 def get_session_history(session_id):
@@ -314,7 +319,11 @@ response = chat.invoke(
     config={"configurable": {"session_id": "cog"}},
 )
 print(response.content)
+```
 
+Now ask about the name — the wrapper replayed the first exchange into the prompt:
+
+```python
 response = chat.invoke(
     {"input": "What is my name?"},
     config={"configurable": {"session_id": "cog"}},

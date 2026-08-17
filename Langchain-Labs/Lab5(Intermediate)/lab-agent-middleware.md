@@ -305,7 +305,11 @@ Drop in your first guardrail. `PIIMiddleware("email", strategy="redact", apply_t
 # PIIMiddleware: prebuilt middleware that scans messages for PII (emails, SSNs, etc.)
 # and either redacts or blocks; PIIDetectionError is raised when strategy="block"
 from langchain.agents.middleware import PIIMiddleware, PIIDetectionError
+```
 
+Build two agents — one that scrubs PII, one that refuses the run entirely:
+
+```python
 pii_redact = create_agent(
     model=model,
     middleware=[PIIMiddleware("email", strategy="redact", apply_to_input=True)],
@@ -329,7 +333,11 @@ print("Model reply:", result["messages"][-1].content)
 
 last_user = [m for m in result["messages"] if m.type == "human"][-1]
 print("What the model actually saw:", repr(last_user.content))
+```
 
+Now the block variant — the run is refused before any model call:
+
+```python
 try:
     pii_block.invoke({"messages": [("human", "My email is john.smith@example.com")]})
 except PIIDetectionError:
@@ -352,7 +360,11 @@ from langchain.tools import tool
 def get_weather(city: str) -> str:
     """Get the current weather for a city."""
     return f"Weather in {city}: 22C, sunny."
+```
 
+Build an agent with a one-call budget:
+
+```python
 budget_agent = create_agent(
     model=model,
     tools=[get_weather],
@@ -384,7 +396,11 @@ Now you write middleware, not just configure it. Subclass `AgentMiddleware` and 
 # Runtime:LangGraph's per-run context object passed to every hook
 from langchain.agents.middleware import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
+```
 
+The class overrides two hooks — one fires before each model call, one after:
+
+```python
 class LoggingMiddleware(AgentMiddleware):
     def before_model(self, state: AgentState, runtime: Runtime) -> dict | None:
         print(f"  [before_model] calling the model with {len(state['messages'])} message(s)")
@@ -420,7 +436,11 @@ from collections.abc import Callable
 # ModelRequest / ModelResponse: the data objects passed through wrap_model_call —
 # ModelRequest carries the messages and config, ModelResponse carries the LLM's reply
 from langchain.agents.middleware import ModelRequest, ModelResponse
+```
 
+The hook wraps the actual model call and measures wall-clock time:
+
+```python
 class TimingMiddleware(AgentMiddleware):
     def wrap_model_call(
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
@@ -455,7 +475,11 @@ For a single small hook, the decorators `@before_model` and `@after_model` turn 
 # Decorator-style hooks: @before_model and @after_model turn a plain function
 # into middleware without subclassing AgentMiddleware — same (state, runtime) signature
 from langchain.agents.middleware import before_model, after_model
+```
 
+The decorators produce the same `AgentMiddleware` objects — just less boilerplate:
+
+```python
 @before_model
 def log_before(state: AgentState, runtime: Runtime) -> dict | None:
     print(f"  [@before_model] {len(state['messages'])} message(s) in state")

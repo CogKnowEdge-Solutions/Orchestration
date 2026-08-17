@@ -344,8 +344,11 @@ system_message = SystemMessage(content="You are a math helper.")   # the rules
 human_message = HumanMessage(content="What is 8 + 7?")             # your words
 ai_message = AIMessage(content="I'll compute that with a tool.")   # the model's words
 tool_message = ToolMessage(content="15", tool_call_id="call_1")    # a tool's result
+```
 
-# Every message has a .type and a .content — the two things that matter
+Every message has a `.type` and a `.content` — the two things that matter. Let's see all four at once:
+
+```python
 for message in [system_message, human_message, ai_message, tool_message]:
     print(f"{message.type:<8} -> {message.content}")
 ```
@@ -384,8 +387,11 @@ model = ChatOpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"), # your key, read from .env
     temperature=0,                           # 0 = factual, reproducible
 )
+```
 
-# The model reads the whole history and answers the last question
+The model reads the whole history and answers the last question:
+
+```python
 reply = model.invoke(history)
 print(f"reply type: {reply.type}")
 print(reply.content)

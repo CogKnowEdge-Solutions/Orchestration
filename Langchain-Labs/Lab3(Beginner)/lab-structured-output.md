@@ -351,7 +351,11 @@ Then we invoke it with the same kind of request that produced a messy string in 
 # with_structured_output binds the schema to the model: every reply is
 # parsed and validated into a Movie object before you see it.
 structured_model = model.with_structured_output(Movie)
+```
 
+Then invoke it and print the fields:
+
+```python
 movie = structured_model.invoke(
     "Return structured details for 'Inception' by Christopher Nolan, released in 2010."
 )
@@ -390,8 +394,11 @@ class ProductReview(BaseModel):
     product: str = Field(description="The exact product being reviewed")
     rating: int = Field(description="The star rating, from 1 to 5")
     sentiment: str = Field(description="positive, negative, or neutral")
+```
 
+Now invoke it on a review:
 
+```python
 review_text = (
     "I bought the 'AeroPress Coffee Maker' two weeks ago and it makes the best "
     "cup of coffee. The whole process takes about two minutes and cleanup is "
@@ -425,9 +432,12 @@ for review_text in reviews_text:
     parsed = model.with_structured_output(ProductReview).invoke(review_text)
     parsed_reviews.append(parsed)
     print(f"{parsed.product} | rating {parsed.rating}/5 | {parsed.sentiment}")
+```
 
-# Because the results are typed data, we can compute on them directly —
-# no string parsing, no cleaning up markdown fences.
+Because the results are typed data, we can compute on them directly:
+
+```python
+# No string parsing — the data is already typed, so arithmetic just works
 average_rating = sum(r.rating for r in parsed_reviews) / len(parsed_reviews)
 print(f"Average rating: {average_rating:.1f}")
 ```

@@ -249,7 +249,12 @@ from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 Path("notes.json").unlink(missing_ok=True)  # start from a clean notes store
+```
 
+Point the client at your server:
+
+```python
+# One entry per server: transport, command to run it, and arguments
 client = MultiServerMCPClient(
     {
         "notes": {
@@ -259,7 +264,12 @@ client = MultiServerMCPClient(
         }
     }
 )
+```
 
+Spawn the server and list its tools:
+
+```python
+# get_tools() spawns the server, asks it which tools it exposes, returns BaseTool objects
 tools = await client.get_tools()
 for tool in tools:
     print(f"- {tool.name}: {tool.description.splitlines()[0]}")
@@ -272,6 +282,7 @@ The `await` at cell top-level works because Jupyter runs cells inside an async l
 Each returned tool carries `args`: the JSON schema the model must fill in to call it. Print `add_note`'s — it's the exact shape MCP delivered over `ListTools`, converted by the adapter.
 
 ```python
+# Each tool carries args: the JSON schema the model must fill in to call it
 print(tools[0].args)
 ```
 
@@ -280,9 +291,11 @@ print(tools[0].args)
 MCP tools are ordinary functions over a protocol — they don't need an LLM. Pull two out of the list and call them with `.ainvoke()`. Every call spawns the server, runs the tool against `notes.json`, and returns a result. Watch `notes.json` appear in the folder.
 
 ```python
+# Pull specific tools out of the discovered list by name
 add = [t for t in tools if t.name == "add_note"][0]
 list_notes = [t for t in tools if t.name == "list_notes"][0]
 
+# Call MCP tools directly — no model involved, just function calls over the protocol
 print(await add.ainvoke({"title": "groceries", "content": "milk, eggs, bread"}))
 print(await list_notes.ainvoke({}))
 ```
@@ -294,8 +307,10 @@ print(await list_notes.ainvoke({}))
 ```python
 from langchain.agents import create_agent
 
+# Same create_agent from Labs 1-6 — MCP tools are just LangChain tools now
 agent = create_agent(model=model, tools=tools)
 
+# One question, two tool calls: add a note then list all notes
 result = await agent.ainvoke(
     {"messages": [("human", "Add a note titled 'meeting' with content 'standup at 10am', then list all my notes.")]}
 )
@@ -308,6 +323,7 @@ for message in result["messages"]:
 The notes live in `notes.json`, not in the model's memory. Ask the agent a follow-up in a fresh invocation: it reaches for `list_notes`, the server reads the file, and the answer reflects everything added in Steps 7–8.
 
 ```python
+# Fresh invocation — the server reads notes.json, not the model's memory
 result = await agent.ainvoke({"messages": [("human", "What notes do I have?")]})
 for message in result["messages"]:
     print(f"{message.type}: {str(message.content)[:90]}")
@@ -318,6 +334,7 @@ for message in result["messages"]:
 Not every question needs a tool. Ask a general-knowledge question and watch the loop skip the tool node entirely — one `ai:` message, no `tool:` line. The agent isn't forced to use its tools.
 
 ```python
+# General-knowledge question — the loop skips the tool node entirely
 result = await agent.ainvoke({"messages": [("human", "In one sentence, what is MCP?")]})
 for message in result["messages"]:
     print(f"{message.type}: {str(message.content)[:90]}")
@@ -328,6 +345,7 @@ for message in result["messages"]:
 Capabilities include removal. Ask the agent to delete the groceries note and tell you what remains; the model picks `delete_note` (then `list_notes`) from the descriptions alone.
 
 ```python
+# Delete via language — the model picks delete_note from descriptions alone
 result = await agent.ainvoke(
     {"messages": [("human", "Delete the note titled 'groceries', then tell me what notes remain.")]}
 )
@@ -340,9 +358,11 @@ for message in result["messages"]:
 Two quick locals. A lookup for a note that doesn't exist returns a clean message from the tool (no crash — the server says so in plain text). `get_server_info()` asks the server to identify itself over the protocol.
 
 ```python
+# Lookup a nonexistent note — clean error from the server, no crash
 get = [t for t in tools if t.name == "get_note"][0]
 print(await get.ainvoke({"note_id": "99"}))
 
+# Server metadata over the MCP protocol
 info = await client.get_server_info()
 print(info["notes"].serverInfo.name, info["notes"].serverInfo.version)
 ```
@@ -352,12 +372,13 @@ print(info["notes"].serverInfo.name, info["notes"].serverInfo.version)
 Connect the *same* server twice under different names. Without care, both would expose `add_note` — a name collision. `tool_name_prefix=True` prefixes every tool with its server name, so the agent can address `notes_add_note` and `work_add_note` unambiguously. This is how production clients attach multiple MCP servers without their tools fighting.
 
 ```python
+# Same server twice under different names — tool_name_prefix avoids collisions
 client2 = MultiServerMCPClient(
     {
         "notes": {"transport": "stdio", "command": sys.executable, "args": [str(Path("mcp_notes_server.py").resolve())]},
         "work": {"transport": "stdio", "command": sys.executable, "args": [str(Path("mcp_notes_server.py").resolve())]},
     },
-    tool_name_prefix=True,
+    tool_name_prefix=True,  # prefixes tool names with server name: notes_add_note, work_add_note
 )
 
 all_tools = await client2.get_tools()

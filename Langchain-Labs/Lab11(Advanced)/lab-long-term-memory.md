@@ -1,4 +1,4 @@
-# Lab 11: Long-Term Memory — the Maître d' Who Never Forgets a Guest
+# Lab 11: Long-Term Memory — the host Who Never Forgets a Guest
 
 **Difficulty: Advanced | ~45 min | Requires Lab 9 (and Lab 10)**
 
@@ -6,7 +6,46 @@
 
 ## 1. Lab Title
 
-**Long-Term Memory for agents: a restaurant maître d' that remembers every guest across sessions — thread-scoped short-term memory, a namespaced long-term store, and keyword recall when a guest says "surprise me."**
+**Long-Term Memory for agents: a restaurant host that remembers every guest across sessions — thread-scoped short-term memory, a namespaced long-term store, and keyword recall when a guest says "surprise me."**
+
+---
+
+## What is Long-Term Memory for Agents?
+
+Most agents you have built so far (Labs 4–9) carry memory in two places: the **model's training knowledge** (static, frozen at train time) and the **conversation history** (live, but scoped to a single thread). When the thread ends, the conversation history is gone. If the user starts a new thread, the agent starts from zero — no name, no preferences, no context from yesterday. This is the "guest who has to reintroduce themselves at every visit" problem.
+
+Long-term memory solves this by giving agents a **persistent, cross-thread store** — a place to write facts that survive across sessions, threads, and even process restarts. But memory is not one thing. Real systems split it into three layers, each with different scope, cost, and retrieval characteristics:
+
+1. **Checkpointer (short-term, thread-scoped).** This is the `MemorySaver` from Lab 9 — it replays the full conversation history within a single thread so the agent can reference earlier turns. Scope: one thread. Lifetime: until you delete the thread. Cost: paid on every invoke (the full message list is part of the context window).
+
+2. **Store (long-term, cross-thread).** An `InMemoryStore` (or a database-backed store in production) keyed by a namespace tuple like `("guests", "amara", "facts")`. Facts written here survive across threads and sessions. Scope: defined by the namespace — one guest's facts are invisible to another's. Lifetime: until you delete them. Cost: zero at rest; paid only when `load_memory` reads them into the prompt.
+
+3. **Recall (retrieval over stored facts).** Just like Lab 9's retrieval-augmented agent retrieved documents from a corpus, the recall layer searches the long-term store for facts relevant to the current message. In this lab it is a simple keyword-overlap scorer; in production it would be a vector similarity search. Scope: the guest's namespace. Cost: a small scoring pass, then only the matching facts enter the context window.
+
+```mermaid
+flowchart LR
+    subgraph "Thread scope"
+        CP["Checkpointer\n(MemorySaver)"]
+    end
+    subgraph "Cross-thread scope"
+        ST["Store\n(InMemoryStore)"]
+    end
+    subgraph "Recall"
+        RC["Keyword / vector scorer"]
+    end
+
+    U["User message"] --> CP
+    CP -->|"full conversation"| A["Agent (LLM)"]
+    A -->|"remember(fact)"| ST
+    A -->|"load_memory"| RC
+    RC -->|"top-k facts"| A
+
+    style CP fill:#e3f2fd,stroke:#1565c0,color:#1a1a1a
+    style ST fill:#fff9c4,stroke:#f9a825,color:#1a1a1a
+    style RC fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a
+```
+
+The key insight is that **each layer has a different boundary**: the checkpointer is per-thread, the store is per-entity (namespaced), and recall is on-demand (like retrieval). This lab wires all three together into a single `load_memory → chef → END` graph and proves the boundaries work by running two guests across three threads.
 
 ---
 
@@ -14,7 +53,7 @@
 
 An agent that forgets is a guest who has to reintroduce themselves at every visit. Labs 5–9 gave you agents with *stateless* conversations and a *thread-scoped* checkpointer; Lab 10 built a routing layer for a support desk. This lab answers the question none of them touch: **how does an agent remember something from one session and use it in another?**
 
-You will build the memory layer behind a one-table restaurant's maître d'. Across three simulated evenings (three threads, two guests), the agent learns that Amara is allergic to cilantro, loves tiramisu, and has a birthday on October 14 — then greets her by name in a *new thread* with zero conversation history, avoids cilantro unprompted, and digs up the birthday menu when she asks "what did you make me last year?" Meanwhile a second guest, Bob, sees none of Amara's facts — memory is namespaced, not shared. Along the way you will split memory into the three layers real systems use: the checkpointer (short-term, thread-scoped), a store (long-term, cross-thread), and retrieval over stored facts (recall). By the end you'll know *where* to put a fact, *when* to read it back, and how to keep one guest's private history out of another's context.
+You will build the memory layer behind a one-table restaurant's host. Across three simulated evenings (three threads, two guests), the agent learns that Amara is allergic to cilantro, loves tiramisu, and has a birthday on October 14 — then greets her by name in a *new thread* with zero conversation history, avoids cilantro unprompted, and digs up the birthday menu when she asks "what did you make me last year?" Meanwhile a second guest, Bob, sees none of Amara's facts — memory is namespaced, not shared. Along the way you will split memory into the three layers real systems use: the checkpointer (short-term, thread-scoped), a store (long-term, cross-thread), and retrieval over stored facts (recall). By the end you'll know *where* to put a fact, *when* to read it back, and how to keep one guest's private history out of another's context.
 
 ---
 
@@ -254,17 +293,26 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langgraph.runtime import Runtime
-from langgraph.store.memory import InMemoryStore
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.runtime import Runtime          # injected run-scoped object (store + context)
+from langgraph.store.memory import InMemoryStore  # cross-thread long-term store
+from langgraph.checkpoint.memory import MemorySaver  # thread-scoped checkpointer
 from dataclasses import dataclass
 from typing import Annotated, TypedDict
+```
 
+The model factory — same free tier as Labs 5–10:
+
+```python
 def model():
     return ChatOpenAI(base_url="https://openrouter.ai/api/v1",
                       api_key=os.environ["OPENROUTER_API_KEY"],
                       model="nvidia/nemotron-3-super-120b-a12b:free", temperature=0)
+```
 
+The measuring instrument:
+
+```python
+# Records prompt_tokens after every LLM call — measures the token price of memory
 class UsageCapture(BaseCallbackHandler):
     def __init__(self): self.calls = []
     def on_llm_end(self, response, **kwargs):
@@ -275,15 +323,21 @@ class UsageCapture(BaseCallbackHandler):
 **Step 3 — The store and the tools.** One `InMemoryStore` for the whole lab, a deterministic `check_pantry` tool, and `make_remember` — the factory that closes over `(store, guest_id)` and returns a `remember` tool that persists a fact. Study `make_remember`: the namespace tuple and the value dict are the entire long-term-memory write API.
 
 ```python
-store = InMemoryStore()
+store = InMemoryStore()  # cross-thread long-term store — survives new threads, new processes
+```
 
+The write side — a factory that closes over the store and guest ID:
+
+```python
+# Factory: closes over (store, guest_id) so remember() writes to the right namespace
 def make_remember(store, guest_id):
     @tool
     def remember(fact: str) -> str:
         """Persist one fact about this guest so every future session recalls it."""
         existing = [i.value["content"] for i in store.search(("guests", guest_id, "facts"))]
         if fact in existing:
-            return "Already remembered."
+            return "Already remembered."  # idempotent — prevents duplicate writes
+        # store.put(namespace, key, value) — the entire long-term write API
         store.put(("guests", guest_id, "facts"), f"fact-{len(existing) + 1}", {"content": fact})
         return f"Remembered as fact {len(existing) + 1}."
     return remember
@@ -292,13 +346,20 @@ def make_remember(store, guest_id):
 **Step 4 — Context schema, state, and the recall scorer.** `Guest` is the `context_schema` dataclass that carries the `guest_id` into nodes; `MemoryState` is the graph state (one `messages` list merged with `add_messages`); `recall_score` is the deterministic retrieval stand-in — it counts overlapping words between the incoming message and a stored fact.
 
 ```python
+# Guest: context_schema dataclass — carries guest_id into every node via Runtime
 @dataclass
 class Guest:
     guest_id: str
 
+# Graph state: shared messages list merged with add_messages
 class MemoryState(TypedDict):
     messages: Annotated[list, add_messages]
+```
 
+The retrieval stand-in — counts overlapping keywords between a query and a stored fact:
+
+```python
+# Keyword overlap scorer — deterministic retrieval stand-in (swap for embeddings in production)
 def recall_score(query: str, fact: str) -> int:
     q = {w for w in query.lower().split() if len(w) > 2}
     f = {w for w in fact.lower().split() if len(w) > 2}
@@ -308,14 +369,22 @@ def recall_score(query: str, fact: str) -> int:
 **Step 5 — `load_memory`: memory as context.** The read path. It searches the guest's namespace, builds the dossier, and when the message overlaps stored facts appends the top-2 as a `recall` line, then returns the whole thing as a `SystemMessage`. Note the signature — `runtime: Runtime[Guest]` is how the node gets both the store and the guest id.
 
 ```python
+# Read path: rebuilds context from the store before every chef call
 def load_memory(state, runtime: Runtime[Guest]):
     guest = runtime.context.guest_id
+    # Search the guest's namespace — prefix-based, so Bob never sees Amara's facts
     facts = runtime.store.search(("guests", guest, "facts"))
     dossier = "\n".join(f"- {i.value['content']}" for i in facts) or "(no facts yet — first visit)"
+```
+
+Now score the message against stored facts and assemble the prompt:
+
+```python
+    # Rank stored facts against the incoming message — top-2 become the recall line
     hits = sorted(((recall_score(state["messages"][-1].content, i.value["content"]), i.value["content"])
                    for i in facts), reverse=True)[:2]
     recall = " | ".join(content for score, content in hits if score > 0)
-    prompt = (f"You are the maître d' of a one-table restaurant. Your guest today is {guest}.\n"
+    prompt = (f"You are the host of a one-table restaurant. Your guest today is {guest}.\n"
               f"Facts you remember about {guest}:\n{dossier}\n")
     if recall:
         prompt += f"The guest's latest message matches these memories: {recall}\n"
@@ -330,66 +399,84 @@ def load_memory(state, runtime: Runtime[Guest]):
 **Step 6 — `chef` and the graph.** `chef_node` builds a fresh `create_agent` bound to `check_pantry` and `make_remember(runtime.store, runtime.context.guest_id)`, invokes it, and records the decision-time tokens. The graph is `START → load_memory → chef → END`, compiled with `checkpointer=MemorySaver()` *and* `store=store` — one for thread memory, one for long-term memory.
 
 ```python
-usage_calls, usage_counts = [], []
+usage_calls, usage_counts = [], []  # track decision-time tokens and call count per chef run
 
+# Chef node: builds a fresh agent per run with the current guest's tools and store
 def chef_node(state, runtime: Runtime[Guest]):
     cap = UsageCapture()
+    # remember is scoped to this guest via the factory — namespaced writes
     agent = create_agent(model=model(),
                          tools=[check_pantry, make_remember(runtime.store, runtime.context.guest_id)],
-                         system_prompt="You are the maître d'. Serve the guest using the profile in your context.")
+                         system_prompt="You are the host. Serve the guest using the profile in your context.")
     result = agent.invoke({"messages": state["messages"]}, config={"callbacks": [cap]})
     usage_calls.append(cap.calls[0])
     usage_counts.append(len(cap.calls))
     return {"messages": result["messages"]}
+```
 
+Wire the graph — two edges, two compiled stores:
+
+```python
+# Graph: load_memory → chef → END, compiled with both checkpointer and store
 app = (StateGraph(state_schema=MemoryState, context_schema=Guest)
        .add_node("load_memory", load_memory)
        .add_node("chef", chef_node)
        .add_edge(START, "load_memory")
        .add_edge("load_memory", "chef")
        .add_edge("chef", END)
-       .compile(checkpointer=MemorySaver(), store=store))
+       .compile(checkpointer=MemorySaver(), store=store))  # MemorySaver = thread memory, store = long-term
 ```
 
 **Step 7 — Evening 1: Amara fills the filing cabinet.** Run the first thread with Amara's introduction. Expect the chef to call `remember` four times (one per fact, the second identical call returns "Already remembered."); print the store afterwards to prove the writes landed.
 
 ```python
+# Helpers reused across all evenings
 def facts_of(guest_id):
+    """Read every stored fact for a guest — the dossier at any point in time."""
     return [i.value["content"] for i in store.search(("guests", guest_id, "facts"))]
 
 def run(thread_id, guest_id, message):
+    """Invoke the graph in a thread for a guest — each call is one 'evening'."""
     result = app.invoke({"messages": [("human", message)]},
                         config={"configurable": {"thread_id": thread_id}},
                         context=Guest(guest_id=guest_id))
     return str(result["messages"][-1].content)
 
 def recall_line(query, guest_id):
+    """Rank stored facts against a query and return the top-2 matches as a string."""
     hits = sorted(((recall_score(query, i.value["content"]), i.value["content"])
                    for i in store.search(("guests", guest_id, "facts"))), reverse=True)[:2]
     return " | ".join(content for score, content in hits if score > 0)
+```
 
+Run the first evening — an empty store, four facts volunteered:
+
+```python
+# Evening 1: empty store — Amara volunteers four facts, chef calls remember for each
 print("EVENING 1 - Amara's first visit (thread: amara-1)")
 answer = run("amara-1", "amara",
              "Good evening! I'm Amara. A few things about me: I'm allergic to cilantro. I love tiramisu. My birthday is October 14, and my grandmother always made saffron risotto for it.")
 print("chef:", answer.replace("\n", " ")[:180])
-print("store now holds:", facts_of("amara"))
+print("store now holds:", facts_of("amara"))  # prove the writes landed
 ```
 
 **Step 8 — Evening 2: a new thread with the old memory.** Run a *different* `thread_id` for the same guest. The conversation from evening 1 is gone, but `load_memory` rebuilds the dossier from the store — the chef greets Amara, avoids cilantro, and this is the moment short-term vs long-term memory stops being theory. Then, in the same thread, ask the birthday question and watch the recall line appear.
 
 ```python
+# Evening 2: new thread, same guest — conversation history is gone, store survives
 print("EVENING 2 — Amara returns in a new thread (thread: amara-2)")
-print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("amara")))
+print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("amara")))  # rebuilt from store
 answer = run("amara-2", "amara", "Hi, it's me again. What's on tonight?")
-print("chef:", answer.replace("\n", " ")[:180])
+print("chef:", answer.replace("\n", " ")[:180])  # chef greets by name, avoids cilantro
 ```
 
 **Step 9 — Evening 2b: the same thread, a recall question.** The conversation in this thread has already loaded Amara's dossier. Now she asks about last year's birthday. `load_memory` re-ranks the stored facts against *this* message and appends a recall line — the birthday fact — so the chef can answer from memory. This is retrieval over the store: the recall line is computed by `recall_score`, not copied by the model.
 
 ```python
+# Evening 2b: same thread — recall question triggers keyword scoring over the store
 print("EVENING 2b — same thread, a recall question")
 query = "What did you make me for my birthday last year?"
-print("recalled:", recall_line(query, "amara") or "(no match)")
+print("recalled:", recall_line(query, "amara") or "(no match)")  # top-2 keyword matches
 answer = run("amara-2", "amara", query)
 print("chef:", answer.replace("\n", " ")[:200])
 ```
@@ -397,16 +484,22 @@ print("chef:", answer.replace("\n", " ")[:200])
 **Step 10 — Evening 3: Bob's isolation.** Run a thread for a new guest. The profile loads empty, Bob's `remember` call writes to *his* namespace, and the closing print shows Amara's facts and Bob's facts side by side — two guests, two branches of the tree, zero leakage.
 
 ```python
+# Evening 3: new guest — namespace isolation means Bob never sees Amara's facts
 print("EVENING 3 - Bob's first visit (thread: bob-1)")
 answer = run("bob-1", "bob", "Hi, I'm Bob. First time here. I don't eat pork.")
 print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("bob")) or "(no facts yet - first visit)")
 print("chef:", answer.replace("\n", " ")[:180])
+```
 
+Close with the ledger — two guests, two namespaces, zero leakage:
+
+```python
+# Ledger: every guest's facts side by side + the token price of memory per chef call
 print()
 print("ledger")
 print("  amara facts:", facts_of("amara"))
 print("  bob   facts:", facts_of("bob"))
-print("  decision-time tokens per chef call:", usage_calls)
+print("  decision-time tokens per chef call:", usage_calls)  # run 2 costs more (dossier in context)
 print("  model calls per chef run:", usage_counts)
 ```
 

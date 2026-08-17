@@ -237,12 +237,20 @@ from langgraph.types import Command
 # GraphRecursionError: raised when the agent loop exceeds its recursion_limit —
 # the hard cap that prevents infinite retry storms on failing tools
 from langgraph.errors import GraphRecursionError
+```
 
+The model factory — same free tier as Labs 5–8:
+
+```python
 def model():
     return ChatOpenAI(base_url="https://openrouter.ai/api/v1",
                       api_key=os.environ["OPENROUTER_API_KEY"],
                       model="nvidia/nemotron-3-super-120b-a12b:free", temperature=0)
+```
 
+The measuring instrument:
+
+```python
 class UsageCapture(BaseCallbackHandler):
     def __init__(self): self.calls = []
     def on_llm_end(self, response, **kwargs):
@@ -273,13 +281,19 @@ def run_etl(job_id: str) -> str:
 checkpointer = MemorySaver()
 agent = create_agent(model=model(), tools=[get_price],
                      interrupt_before=["tools"], checkpointer=checkpointer)
-cfg = {"configurable": {"thread_id": "runtime-demo"}}
+cfg = {"configurable": {"thread_id": "runtime-demo"}}  # thread_id keys the checkpointer's state
 
+# First invoke: runs until the tool node, then parks
 agent.invoke({"messages": [("human", "What is the current BTC price?")]}, config=cfg)
 state = agent.get_state(cfg)
-print("paused before node:", state.next)
-print("pending tool call :", state.values["messages"][-1].tool_calls)
+print("paused before node:", state.next)                  # ('tools',)
+print("pending tool call :", state.values["messages"][-1].tool_calls)  # what it was about to do
+```
 
+Inspect the paused state, then release it:
+
+```python
+# Resume: releases the parked run from exactly where it stopped
 agent.invoke(Command(resume="proceed"), config=cfg)
 final = agent.get_state(cfg).values["messages"][-1].content
 print("answer after resume:", str(final)[:100])
@@ -288,12 +302,13 @@ print("answer after resume:", str(final)[:100])
 **Step 5 — Bound the loop: recursion_limit.** Run the flaky tool with a `recursion_limit` of 8. The system prompt gives the agent every excuse to retry a transient error, so only the runtime stops it. Catch `GraphRecursionError` and print what happened. In production this is the line that prevents a retry storm from burning a budget — your agent retries *until you tell it how many times*.
 
 ```python
+# The flaky tool retries forever unless recursion_limit stops it
 try:
     agent = create_agent(model=model(), tools=[run_etl],
                          system_prompt="You are a trading-ops automation agent. Transient errors (503) are "
                                       "expected from the warehouse — retry the ETL job until it succeeds.")
     agent.invoke({"messages": [("human", "Submit the ETL job j-1042 and report its status.")]},
-                 config={"recursion_limit": 8})
+                 config={"recursion_limit": 8})  # counts nodes visited, not model calls
     print("run completed normally")
 except GraphRecursionError:
     print("GraphRecursionError: the loop hit the recursion_limit runtime bound")
@@ -302,6 +317,7 @@ except GraphRecursionError:
 **Step 6 — The knowledge base.** Eight documents in a plain dict, the whole corpus ~1,570 chars. This is deliberately small (PF-4: sized to teach) — the mechanism, not the megabytes, is the lesson. Note how this corpus is **not** in the model's training data as your system's policy: nothing about the fictitious Meridian limits is knowable except by reading these docs.
 
 ```python
+# Eight internal-wiki docs — the corpus the model cannot know from training
 DOCS = {
  "deploy-windows": "Production deploys happen on Tuesdays and Thursdays between 02:00 and 04:00 UTC. "
                     "A 15 minute freeze window blocks new orders while each deploy restarts the matching engine.",
@@ -323,6 +339,11 @@ DOCS = {
  "support-escalation": "Support severity tiers are S1 through S3. S1 incidents page the on-call within 5 "
                         "minutes, S2 within 30 minutes, and S3 during business hours within 2 hours.",
 }
+```
+
+Flatten into a single string for the baked-in variant:
+
+```python
 corpus_text = "\n\n".join(f"[{t}] {d}" for t, d in DOCS.items())
 print(f"{len(DOCS)} docs, {len(corpus_text)} chars in the corpus")
 ```
@@ -330,9 +351,11 @@ print(f"{len(DOCS)} docs, {len(corpus_text)} chars in the corpus")
 **Step 7 — The retriever: BM25, implemented inline.** Three pieces: `tokenize` (lowercase alphanumeric terms), `bm25` (the scoring formula), and `kb_search`, the `@tool` wrapper that returns the top-2 documents verbatim. The tool call at the bottom of the cell demonstrates the ranking on the lab's own question — expect `order-types` then `risk-limits` on top.
 
 ```python
+# Tokenizer: lowercase alphanumeric terms only
 def tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
+# BM25 scoring: term frequency × IDF, length-normalized
 def bm25(query: str, docs: dict, k1: float = 1.5, b: float = 0.75) -> list[tuple[str, float]]:
     q_terms = tokenize(query)
     n = len(docs)
@@ -348,14 +371,23 @@ def bm25(query: str, docs: dict, k1: float = 1.5, b: float = 0.75) -> list[tuple
             s += idf * tf.get(t, 0) * (k1 + 1) / (tf.get(t, 0) + k1 * (1 - b + b * dl / avgdl))
         scores[title] = s
     return sorted(scores.items(), key=lambda x: -x[1])
+```
 
+The tool wrapper that calls BM25 and returns the top-2:
+
+```python
+# kb_search: the @tool wrapper — returns top-2 docs verbatim for the agent to read
 @tool
 def kb_search(query: str) -> str:
     """Search the Meridian Trading knowledge base for the documents most relevant
     to a question and return them verbatim."""
     top = bm25(query, DOCS)[:2]
     return "\n\n".join(f"[{t}] {DOCS[t]}" for t, _ in top)
+```
 
+Verify the ranking on the lab's own question:
+
+```python
 for title, score in bm25("Can I place a market order for $80,000 of BTC?", DOCS)[:2]:
     print(f"  top doc {title}: score {score:.2f}")
 ```
@@ -365,31 +397,34 @@ for title, score in bm25("Can I place a market order for $80,000 of BTC?", DOCS)
 ```python
 QUESTION = "Can I place a market order for $80,000 of BTC, and what is the largest position I may hold?"
 
+# Variant A: baked-in — the entire corpus is pasted into the system prompt
 baked = create_agent(model=model(),
                      system_prompt=f"You answer questions about the Meridian Trading system using ONLY "
-                                  f"the internal knowledge base:\n\n{corpus_text}")
+                                   f"the internal knowledge base:\n\n{corpus_text}")
 cap_baked = UsageCapture()
 answer = baked.invoke({"messages": [("human", QUESTION)]}, config={"callbacks": [cap_baked]})
-print("first-call input tokens:", cap_baked.calls[0])
+print("first-call input tokens:", cap_baked.calls[0])  # pays for all 8 docs up front
 print("answer:", str(answer["messages"][-1].content)[:120].replace("\n", " "))
 ```
 
 **Step 9 — Variant B: retrieval-augmented.** Same question, a small system prompt, one tool. The agent calls `kb_search` at runtime; the ledger shows ~335 tokens for the decision call and ~495 after the retrieved documents enter context. Compare with Step 8: same answer, cheaper decision, and the gap only grows with the corpus.
 
 ```python
+# Variant B: retrieval-augmented — small system prompt, one tool, fetch on demand
 retrieval = create_agent(model=model(), tools=[kb_search],
                          system_prompt="You are a trading-ops assistant. Use the kb_search tool to find "
-                                      "facts about the Meridian Trading system before answering.")
+                                       "facts about the Meridian Trading system before answering.")
 cap_retrieval = UsageCapture()
 answer = retrieval.invoke({"messages": [("human", QUESTION)]},
                           config={"callbacks": [cap_retrieval]})
-print("per-call input tokens:", cap_retrieval.calls)
+print("per-call input tokens:", cap_retrieval.calls)  # [decision cost, post-retrieval cost]
 print("answer:", str(answer["messages"][-1].content)[:120].replace("\n", " "))
 ```
 
 **Step 10 — Close the loop.** Print the comparison table and read it back: baked-in is a fixed cost, retrieval is a variable one; interrupts and recursion limits are the execution-side equivalents — deciding *when* the loop may act and *when* it must stop.
 
 ```python
+# Compare the two approaches: fixed cost (baked-in) vs variable cost (retrieval)
 print("decision-time context (first LLM call):")
 print(f"  baked-in : {cap_baked.calls[0]:>6} tokens  (whole corpus in the system prompt)")
 print(f"  retrieval: {cap_retrieval.calls[0]:>6} tokens  (only the tool schema)")

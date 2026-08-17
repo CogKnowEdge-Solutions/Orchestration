@@ -337,7 +337,11 @@ BANK_PROMPT = (
 )
 
 bare_agent = create_agent(model=model, tools=[get_balance, transfer_money], system_prompt=BANK_PROMPT)
+```
 
+Run it and watch the money move with no approval:
+
+```python
 result = bare_agent.invoke({"messages": [("human", "Transfer $500 from account-1 to account-2.")]})
 for m in result["messages"]:
     print(f"  {m.type}: {str(m.content)[:70]}")
@@ -361,7 +365,11 @@ INJECTION_PHRASES = [
     "ignore all previous instructions",
     "disregard the system prompt",
 ]
+```
 
+The guard inspects every human message and jumps to end on a match:
+
+```python
 class InjectionGuard(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     def before_model(self, state: AgentState, runtime: Runtime) -> dict | None:
@@ -432,7 +440,11 @@ Guardrails are automatic; **human-in-the-loop** (HITL) is the opposite: a *perso
 from langchain.agents.middleware import HumanInTheLoopMiddleware, InterruptOnConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
+```
 
+Build the agent with the interrupt wired to transfer_money:
+
+```python
 hitl_agent = create_agent(
     model=model,
     tools=[get_balance, transfer_money],

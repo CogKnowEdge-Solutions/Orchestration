@@ -218,8 +218,11 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
+```
 
+The model factory — same free tier as Labs 5–7:
 
+```python
 def model():
     return ChatOpenAI(
         base_url="https://openrouter.ai/api/v1",
@@ -227,8 +230,11 @@ def model():
         model="nvidia/nemotron-3-super-120b-a12b:free",
         temperature=0,
     )
+```
 
+The measuring instrument:
 
+```python
 class UsageCapture(BaseCallbackHandler):
     """Records prompt_tokens for every LLM call in a run."""
 
@@ -250,6 +256,7 @@ BASE = f"http://127.0.0.1:{PORT}/mcp"
 
 
 def port_up(port, timeout=20):
+    """Wait until the port accepts TCP connections — retries until timeout."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -259,8 +266,12 @@ def port_up(port, timeout=20):
         except OSError:
             time.sleep(0.3)
     return False
+```
 
+Spawn the server only if the port is not already answering:
 
+```python
+# Only spawn if nothing is already listening — re-running never stacks orphans
 server = None
 if not port_up(PORT, timeout=1):
     logfile = open("mcp_ops_server.log", "w")
@@ -277,12 +288,14 @@ print("endpoint:", BASE)
 **Step 4 — Connect two remote servers.** One `MultiServerMCPClient`, two entries, both `"transport": "http"`. This is the entire "remote" trick — notice how little changed from Lab 7:
 
 ```python
+# Two remote servers, both over HTTP — the entire "remote" trick is just the transport key
 client = MultiServerMCPClient({
     "coinfuty": {"transport": "http", "url": "https://mcp.coinfuty.com/api/mcp"},
-    "ops":      {"transport": "http", "url": "http://127.0.0.1:8788/mcp"},
+    "ops":      {"transport": "http", "url": f"http://127.0.0.1:{PORT}/mcp"},
 })
 tools = await client.get_tools()
 
+# Split discovered tools by source — external (someone else's) vs local (yours)
 external = [t for t in tools if t.name.startswith(("get_", "list_"))]
 local = [t for t in tools if t.name.startswith("digest_")]
 print("external tools:", [t.name for t in external])
@@ -294,6 +307,7 @@ Print the discovered tool names. The external server's names (`get_funding_rates
 **Step 5 — Take the context ledger.** Before calling the model, serialize the *fixed cost*. For every external tool, print `len(str(tool.args))` — the character size of its JSON schema — and total it. Do the same for your server's tools. This is the number that gets paid on every request, used or not. (For the model this maps roughly to one token per 4 chars of schema.) Expect the full external set to be well over 1,000 characters of schema, and several of Coinfuty's tools to be 300–570 characters on their own.
 
 ```python
+# Measure the fixed cost: schema chars per tool — paid on every request while bound
 ext_total = 0
 for t in external:
     print(f"  {t.name}: schema {len(str(t.args))} chars")
@@ -307,14 +321,19 @@ for t in local:
 **Step 6 — A/B 1: prune the external tools.** Same question — *"What is the current funding rate and open interest for BTC futures?"* — asked twice, once with all 7 external tools bound and once with only the 2 that the question needs (`get_funding_rates`, `get_coin_summary`). `run_with_usage` runs an agent and returns the per-call input tokens; `calls[0]` is the decision-time context. Both answers should be correct and structurally identical.
 
 ```python
+# Helper: run an agent and return per-call input tokens + the answer
 async def run_with_usage(agent, question):
     capture = UsageCapture()
     result = await agent.ainvoke(
         {"messages": [("human", question)]}, config={"callbacks": [capture]}
     )
     return capture.calls, str(result["messages"][-1].content)
+```
 
+Run the same question with all 7 tools versus only the 2 relevant ones:
 
+```python
+# A/B: same question, all 7 tools vs only the 2 relevant ones
 Q1 = "What is the current funding rate and open interest for BTC futures?"
 pruned_names = {"get_funding_rates", "get_coin_summary"}
 pruned = [t for t in external if t.name in pruned_names]
@@ -331,13 +350,19 @@ print("answer (2)  :", ans_2[:70].replace("\n", " "))
 **Step 7 — A/B 2: shape the results on your own server.** Now the *variable cost*. Both agents answer *"Read the recent logs for BTC and summarize what happened."* — one bound only to `digest_logs` (the raw firehose, 300 lines ≈ 14 KB by default), one only to `digest_highlights` (the *same* events, compressed server-side to ~160 chars). First measure the result sizes directly (free — no model involved), then run the agents and watch the **second** call: that is how much context the tool result dragged into the model.
 
 ```python
+# A/B: same question, fat result (raw logs) vs lean result (server-side digest)
 logs_fat = [t for t in local if t.name == "digest_logs"][0]
 logs_lean = [t for t in local if t.name == "digest_highlights"][0]
 fat_result = await logs_fat.ainvoke({"coins": "BTC"})
 lean_result = await logs_lean.ainvoke({"coins": "BTC"})
 print("fat result chars: ", len(str(fat_result)))
 print("lean result chars:", len(str(lean_result)))
+```
 
+Run both agents and compare the post-result token cost:
+
+```python
+# Run both agents and measure the second-call context (post-result)
 Q2 = "Read the recent logs for BTC and summarize what happened."
 calls_fat, ans_fat = await run_with_usage(create_agent(model=model(), tools=[logs_fat]), Q2)
 calls_lean, ans_lean = await run_with_usage(create_agent(model=model(), tools=[logs_lean]), Q2)
@@ -351,6 +376,7 @@ print("answer (lean):", ans_lean[:70].replace("\n", " "))
 **Step 8 — Close the ledger.** Print one comparison table (schema chars, result chars, first-call tokens, second-call tokens) and read the ratios back. Under Advanced difficulty this is where you connect the numbers to the decision: prune, describe, shape — and when each lever is available to you.
 
 ```python
+# Context ledger: compare schema chars, result chars, and token costs side by side
 fat_ctx = calls_fat[1] if len(calls_fat) > 1 else 0
 lean_ctx = calls_lean[1] if len(calls_lean) > 1 else 0
 print(f"prune: decision tokens   {calls_all[0]:>6} -> {calls_2[0]:>6}   ({(1 - calls_2[0] / calls_all[0]):.0%} less)")
@@ -361,6 +387,7 @@ print(f"shape: post-result ctx   {fat_ctx:>6} -> {lean_ctx:>6}   ({(1 - lean_ctx
 **Step 9 — Shut the server down.** Terminate the background process, but only the one this kernel spawned (track the `Popen` handle and check it is still alive). If a server was already running when you started, leave it alone.
 
 ```python
+# Only terminate the server this kernel spawned — leave pre-existing ones alone
 if server is not None and server.poll() is None:
     server.terminate()
     print("stopped the server we spawned")
