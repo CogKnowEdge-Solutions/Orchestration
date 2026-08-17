@@ -18,7 +18,7 @@ Long-term memory solves this by giving agents a **persistent, cross-thread store
 
 1. **Checkpointer (short-term, thread-scoped).** This is the `MemorySaver` from Lab 9 — it replays the full conversation history within a single thread so the agent can reference earlier turns. Scope: one thread. Lifetime: until you delete the thread. Cost: paid on every invoke (the full message list is part of the context window).
 
-2. **Store (long-term, cross-thread).** An `InMemoryStore` (or a database-backed store in production) keyed by a namespace tuple like `("guests", "amara", "facts")`. Facts written here survive across threads and sessions. Scope: defined by the namespace — one guest's facts are invisible to another's. Lifetime: until you delete them. Cost: zero at rest; paid only when `load_memory` reads them into the prompt.
+2. **Store (long-term, cross-thread).** An `InMemoryStore` (or a database-backed store in production) keyed by a namespace tuple like `("guests", "cog", "facts")`. Facts written here survive across threads and sessions. Scope: defined by the namespace — one guest's facts are invisible to another's. Lifetime: until you delete them. Cost: zero at rest; paid only when `load_memory` reads them into the prompt.
 
 3. **Recall (retrieval over stored facts).** Just like Lab 9's retrieval-augmented agent retrieved documents from a corpus, the recall layer searches the long-term store for facts relevant to the current message. In this lab it is a simple keyword-overlap scorer; in production it would be a vector similarity search. Scope: the guest's namespace. Cost: a small scoring pass, then only the matching facts enter the context window.
 
@@ -53,7 +53,7 @@ The key insight is that **each layer has a different boundary**: the checkpointe
 
 An agent that forgets is a guest who has to reintroduce themselves at every visit. Labs 5–9 gave you agents with *stateless* conversations and a *thread-scoped* checkpointer; Lab 10 built a routing layer for a support desk. This lab answers the question none of them touch: **how does an agent remember something from one session and use it in another?**
 
-You will build the memory layer behind a one-table restaurant's host. Across three simulated evenings (three threads, two guests), the agent learns that Amara is allergic to cilantro, loves tiramisu, and has a birthday on October 14 — then greets her by name in a *new thread* with zero conversation history, avoids cilantro unprompted, and digs up the birthday menu when she asks "what did you make me last year?" Meanwhile a second guest, Bob, sees none of Amara's facts — memory is namespaced, not shared. Along the way you will split memory into the three layers real systems use: the checkpointer (short-term, thread-scoped), a store (long-term, cross-thread), and retrieval over stored facts (recall). By the end you'll know *where* to put a fact, *when* to read it back, and how to keep one guest's private history out of another's context.
+You will build the memory layer behind a one-table restaurant's host. Across three simulated evenings (three threads, two guests), the agent learns that Cog is allergic to cilantro, loves tiramisu, and has a birthday on October 14 — then greets her by name in a *new thread* with zero conversation history, avoids cilantro unprompted, and digs up the birthday menu when she asks "what did you make me last year?" Meanwhile a second guest, Node, sees none of Cog's facts — memory is namespaced, not shared. Along the way you will split memory into the three layers real systems use: the checkpointer (short-term, thread-scoped), a store (long-term, cross-thread), and retrieval over stored facts (recall). By the end you'll know *where* to put a fact, *when* to read it back, and how to keep one guest's private history out of another's context.
 
 ---
 
@@ -61,7 +61,7 @@ You will build the memory layer behind a one-table restaurant's host. Across thr
 
 No external dataset. Everything is generated during the lab — that is the point, because the lab's "data" is **the conversation itself**:
 
-- **Three guest sessions** written as plain strings: Amara's first visit (she volunteers her allergy, favourite dessert, and birthday), Amara's second visit in a fresh thread (a greeting, then a recall question about her birthday menu), and Bob's first visit (he only says he doesn't eat pork).
+- **Three guest sessions** written as plain strings: Cog's first visit (she volunteers her allergy, favourite dessert, and birthday), Cog's second visit in a fresh thread (a greeting, then a recall question about her birthday menu), and Node's first visit (he only says he doesn't eat pork).
 - **A fictional kitchen inventory** — five ingredients hardcoded in `check_pantry`, so the chef's suggestions are grounded in reproducible facts, not imagination.
 - **The model** — the same free OpenRouter model from Labs 5–10, keyed from `.env`. It supplies the chef's persona and drives the `remember` tool; the memory machinery around it is entirely local and deterministic.
 
@@ -73,7 +73,7 @@ One graph, four pieces, three runs. The graph is a short pipeline: `load_memory 
 
 1. **`load_memory`** (a plain node) reads the store for the guest's namespace, builds a *dossier* of every stored fact, and — when the guest's message matches stored facts by keyword overlap — adds a *recalled* line. It injects all of it as a `SystemMessage` so the model sees memory as context.
 2. **`chef`** (a `create_agent`) answers from that context. It holds two tools: `check_pantry` (grounded menu suggestions) and `remember` — the write side of long-term memory. When the model calls `remember`, the tool writes the fact into the store's namespace for that guest.
-3. **Three runs prove the three layers.** Run 1 (Amara, thread `amara-1`) starts with an empty store and fills it. Run 2 (Amara, thread `amara-2`) shows the store surviving across threads while the conversation history does not. Run 3 (Bob, thread `bob-1`) shows namespace isolation.
+3. **Three runs prove the three layers.** Run 1 (Cog, thread `cog-1`) starts with an empty store and fills it. Run 2 (Cog, thread `cog-2`) shows the store surviving across threads while the conversation history does not. Run 3 (Node, thread `node-1`) shows namespace isolation.
 4. **The ledger** closes by printing each guest's stored facts and the decision-time token cost per chef call — memory has a price, and it is visible in the token count of run 2 versus run 1.
 
 Total model cost: **~15 OpenRouter calls per full run** on the free model.
@@ -84,54 +84,54 @@ Total model cost: **~15 OpenRouter calls per full run** on the free model.
 
 Four concrete outputs. Values are live model text, so the wording drifts a little; the *structure* is stable. These are the real outputs of a clean run (Restart & Run All from an empty store).
 
-**1. Session 1 — Amara's first visit (empty store, thread `amara-1`):**
+**1. Session 1 — Cog's first visit (empty store, thread `cog-1`):**
 
 ```
-chef: Good evening, Amara! Welcome to our restaurant. I hope you're having a lovely day.
+chef: Good evening, Cog! Welcome to our restaurant. I hope you're having a lovely day.
       I've taken note of a few things you shared: you're allergic to cilantro, you love tiramisu, yo...
-store now holds: ['Amara is allergic to cilantro.', 'Amara loves tiramisu.',
-                  "Amara's birthday is October 14.",
-                  "Amara's grandmother always made saffron risotto for her birthday."]
+store now holds: ['Cog is allergic to cilantro.', 'Cog loves tiramisu.',
+                  "Cog's birthday is October 14.",
+                  "Cog's grandmother always made saffron risotto for her birthday."]
 ```
 
-All four facts landed in Amara's namespace — including the risotto one, which is the key to the recall demo in session 2b.
+All four facts landed in Cog's namespace — including the risotto one, which is the key to the recall demo in session 2b.
 
-**2. Session 2 — Amara returns in a brand-new thread (`amara-2`) — the store survived, the conversation did not:**
+**2. Session 2 — Cog returns in a brand-new thread (`cog-2`) — the store survived, the conversation did not:**
 
 ```
-profile loaded: - Amara is allergic to cilantro.
-                - Amara loves tiramisu.
-                - Amara's birthday is October 14.
-                - Amara's grandmother always made saffron risotto for her birthday.
-chef: Welcome back, Amara! It's a pleasure to see you again. I've checked our pantry tonight and found
+profile loaded: - Cog is allergic to cilantro.
+                - Cog loves tiramisu.
+                - Cog's birthday is October 14.
+                - Cog's grandmother always made saffron risotto for her birthday.
+chef: Welcome back, Cog! It's a pleasure to see you again. I've checked our pantry tonight and found
       we have saffron and mascarpone in stock, which reminds me of your grandmother's saffron risotto...
 ```
 
 **3. Session 2b — the same thread, a recall question — keyword scoring surfaces both birthday memories:**
 
 ```
-recalled: Amara's grandmother always made saffron risotto for her birthday. | Amara's birthday is October 14.
+recalled: Cog's grandmother always made saffron risotto for her birthday. | Cog's birthday is October 14.
 chef: I don't have a specific record of what I prepared for your birthday last year in my memory.
       However, I do know that your grandmother always made saffron risotto for your birthday...
 ```
 
-**4. Session 3 — Bob, a different guest, sees none of Amara's memory (`bob-1`), and the ledger closes:**
+**4. Session 3 — Node, a different guest, sees none of Cog's memory (`node-1`), and the ledger closes:**
 
 ```
-profile loaded: - Bob does not eat pork
-chef: Hello Bob, welcome to our restaurant! It's a pleasure to have you here for your first visit.
+profile loaded: - Node does not eat pork
+chef: Hello Node, welcome to our restaurant! It's a pleasure to have you here for your first visit.
       May I ask if you have any other dietary preferences or restrictions I should be aware of?
 
 ledger
-  amara facts: ['Amara is allergic to cilantro.', 'Amara loves tiramisu.',
-                "Amara's birthday is October 14.",
-                "Amara's grandmother always made saffron risotto for her birthday."]
-  bob   facts: ['Bob does not eat pork']
+  cog facts: ['Cog is allergic to cilantro.', 'Cog loves tiramisu.',
+                "Cog's birthday is October 14.",
+                "Cog's grandmother always made saffron risotto for her birthday."]
+  node   facts: ['Node does not eat pork']
   decision-time tokens per chef call: [526, 527, 1225, 491]
   model calls per chef run: [6, 5, 1, 2]
 ```
 
-The headline is the *isolation + persistence* pair. Threads are cheap amnesia; the store is deliberate memory. Amara's facts appear in a thread that never met her before, Bob never sees them, and every fact a `remember` call writes is a fact `load_memory` can read on the next evening. Note the ledger's second line — each chef run is a small agent loop, so a session costs several model calls (here 6, 5, 1, 2), and run 2's chef call carries more decision-time tokens than run 1's because the dossier is now in its context.
+The headline is the *isolation + persistence* pair. Threads are cheap amnesia; the store is deliberate memory. Cog's facts appear in a thread that never met her before, Node never sees them, and every fact a `remember` call writes is a fact `load_memory` can read on the next evening. Note the ledger's second line — each chef run is a small agent loop, so a session costs several model calls (here 6, 5, 1, 2), and run 2's chef call carries more decision-time tokens than run 1's because the dossier is now in its context.
 
 ---
 
@@ -165,15 +165,15 @@ Agents get "memory" from three different mechanisms, and the most common product
 
 ```mermaid
 graph TD
-    subgraph Thread1["Evening 1 — thread amara-1"]
-        A1["Human: 'I'm Amara, allergic to cilantro…'"]
+    subgraph Thread1["Evening 1 — thread cog-1"]
+        A1["Human: 'I'm Cog, allergic to cilantro…'"]
         C1["chef node"]
         W1["remember() writes<br/>to store"]
     end
     subgraph Store["Long-term store (survives threads)"]
-        NS["namespace ('guests', 'amara', 'facts')<br/>fact-1: allergic to cilantro<br/>fact-2: loves tiramisu<br/>fact-3: birthday Oct 14"]
+        NS["namespace ('guests', 'cog', 'facts')<br/>fact-1: allergic to cilantro<br/>fact-2: loves tiramisu<br/>fact-3: birthday Oct 14"]
     end
-    subgraph Thread2["Evening 2 — thread amara-2 (no history)"]
+    subgraph Thread2["Evening 2 — thread cog-2 (no history)"]
         L2["load_memory reads store"]
         C2["chef node<br/>sees dossier as context"]
     end
@@ -186,7 +186,7 @@ graph TD
 
 ### The store: namespaces, items, and the `Runtime`
 
-A store is a key–value tree. `store.put(("guests", "amara", "facts"), "fact-1", {"content": "..."})` writes an item whose **namespace** is the tuple `("guests", "amara", "facts")`, whose **key** is `"fact-1"`, and whose **value** is the dict `{"content": ...}`. Reading is prefix-based: `store.search(("guests", "amara", "facts"))` returns every fact for Amara, and — this is the isolation guarantee — Bob's namespace `("guests", "bob", "facts")` is a different branch of the tree. Namespaces are how you partition memory by user, tenant, or category without any shared-state bugs.
+A store is a key–value tree. `store.put(("guests", "cog", "facts"), "fact-1", {"content": "..."})` writes an item whose **namespace** is the tuple `("guests", "cog", "facts")`, whose **key** is `"fact-1"`, and whose **value** is the dict `{"content": ...}`. Reading is prefix-based: `store.search(("guests", "cog", "facts"))` returns every fact for Cog, and — this is the isolation guarantee — Node's namespace `("guests", "node", "facts")` is a different branch of the tree. Namespaces are how you partition memory by user, tenant, or category without any shared-state bugs.
 
 Nodes reach the store through a mechanism this lab uses for the first time: the **injected `Runtime`**. Compile the graph with `store=store` and a `context_schema=Guest`; declare `runtime: Runtime[Guest]` in a node's signature and LangGraph hands you an object carrying `runtime.store` and `runtime.context` (here, the `guest_id`). No globals, no plumbing — the graph's run-scoped dependencies show up as a parameter.
 
@@ -220,13 +220,13 @@ The tradeoff to name for an Advanced audience is the **context bill**: memory do
 
 ```mermaid
 sequenceDiagram
-    participant U as Amara (thread amara-2)
+    participant U as Cog (thread cog-2)
     participant L as load_memory node
     participant S as InMemoryStore
     participant C as chef agent
     participant T as remember tool
     U->>L: "Hi, it's me again. What's on tonight?"
-    L->>S: store.search(("guests","amara","facts"))
+    L->>S: store.search(("guests","cog","facts"))
     S-->>L: fact-1, fact-2, fact-3
     L-->>C: SystemMessage(dossier) + history
     C->>T: check_pantry("saffron")
@@ -240,7 +240,7 @@ sequenceDiagram
 
 ### Isolation is a feature, not an accident
 
-Because memory is namespaced per guest, Bob's evening can never be contaminated by Amara's facts — the same mechanism that makes multi-tenant SaaS safe. Contrast this with a single shared `messages` list: that is *team* memory (Lab 10's desk), where every agent shares the thread. Long-term memory is *per-entity* memory, and the namespace is the boundary.
+Because memory is namespaced per guest, Node's evening can never be contaminated by Cog's facts — the same mechanism that makes multi-tenant SaaS safe. Contrast this with a single shared `messages` list: that is *team* memory (Lab 10's desk), where every agent shares the thread. Long-term memory is *per-entity* memory, and the namespace is the boundary.
 
 ---
 
@@ -372,7 +372,7 @@ def recall_score(query: str, fact: str) -> int:
 # Read path: rebuilds context from the store before every chef call
 def load_memory(state, runtime: Runtime[Guest]):
     guest = runtime.context.guest_id
-    # Search the guest's namespace — prefix-based, so Bob never sees Amara's facts
+    # Search the guest's namespace — prefix-based, so Node never sees Cog's facts
     facts = runtime.store.search(("guests", guest, "facts"))
     dossier = "\n".join(f"- {i.value['content']}" for i in facts) or "(no facts yet — first visit)"
 ```
@@ -427,7 +427,7 @@ app = (StateGraph(state_schema=MemoryState, context_schema=Guest)
        .compile(checkpointer=MemorySaver(), store=store))  # MemorySaver = thread memory, store = long-term
 ```
 
-**Step 7 — Evening 1: Amara fills the filing cabinet.** Run the first thread with Amara's introduction. Expect the chef to call `remember` four times (one per fact, the second identical call returns "Already remembered."); print the store afterwards to prove the writes landed.
+**Step 7 — Evening 1: Cog fills the filing cabinet.** Run the first thread with Cog's introduction. Expect the chef to call `remember` four times (one per fact, the second identical call returns "Already remembered."); print the store afterwards to prove the writes landed.
 
 ```python
 # Helpers reused across all evenings
@@ -452,42 +452,42 @@ def recall_line(query, guest_id):
 Run the first evening — an empty store, four facts volunteered:
 
 ```python
-# Evening 1: empty store — Amara volunteers four facts, chef calls remember for each
-print("EVENING 1 - Amara's first visit (thread: amara-1)")
-answer = run("amara-1", "amara",
-             "Good evening! I'm Amara. A few things about me: I'm allergic to cilantro. I love tiramisu. My birthday is October 14, and my grandmother always made saffron risotto for it.")
+# Evening 1: empty store — Cog volunteers four facts, chef calls remember for each
+print("EVENING 1 - Cog's first visit (thread: cog-1)")
+answer = run("cog-1", "cog",
+             "Good evening! I'm Cog. A few things about me: I'm allergic to cilantro. I love tiramisu. My birthday is October 14, and my grandmother always made saffron risotto for it.")
 print("chef:", answer.replace("\n", " ")[:180])
-print("store now holds:", facts_of("amara"))  # prove the writes landed
+print("store now holds:", facts_of("cog"))  # prove the writes landed
 ```
 
-**Step 8 — Evening 2: a new thread with the old memory.** Run a *different* `thread_id` for the same guest. The conversation from evening 1 is gone, but `load_memory` rebuilds the dossier from the store — the chef greets Amara, avoids cilantro, and this is the moment short-term vs long-term memory stops being theory. Then, in the same thread, ask the birthday question and watch the recall line appear.
+**Step 8 — Evening 2: a new thread with the old memory.** Run a *different* `thread_id` for the same guest. The conversation from evening 1 is gone, but `load_memory` rebuilds the dossier from the store — the chef greets Cog, avoids cilantro, and this is the moment short-term vs long-term memory stops being theory. Then, in the same thread, ask the birthday question and watch the recall line appear.
 
 ```python
 # Evening 2: new thread, same guest — conversation history is gone, store survives
-print("EVENING 2 — Amara returns in a new thread (thread: amara-2)")
-print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("amara")))  # rebuilt from store
-answer = run("amara-2", "amara", "Hi, it's me again. What's on tonight?")
+print("EVENING 2 — Cog returns in a new thread (thread: cog-2)")
+print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("cog")))  # rebuilt from store
+answer = run("cog-2", "cog", "Hi, it's me again. What's on tonight?")
 print("chef:", answer.replace("\n", " ")[:180])  # chef greets by name, avoids cilantro
 ```
 
-**Step 9 — Evening 2b: the same thread, a recall question.** The conversation in this thread has already loaded Amara's dossier. Now she asks about last year's birthday. `load_memory` re-ranks the stored facts against *this* message and appends a recall line — the birthday fact — so the chef can answer from memory. This is retrieval over the store: the recall line is computed by `recall_score`, not copied by the model.
+**Step 9 — Evening 2b: the same thread, a recall question.** The conversation in this thread has already loaded Cog's dossier. Now she asks about last year's birthday. `load_memory` re-ranks the stored facts against *this* message and appends a recall line — the birthday fact — so the chef can answer from memory. This is retrieval over the store: the recall line is computed by `recall_score`, not copied by the model.
 
 ```python
 # Evening 2b: same thread — recall question triggers keyword scoring over the store
 print("EVENING 2b — same thread, a recall question")
 query = "What did you make me for my birthday last year?"
-print("recalled:", recall_line(query, "amara") or "(no match)")  # top-2 keyword matches
-answer = run("amara-2", "amara", query)
+print("recalled:", recall_line(query, "cog") or "(no match)")  # top-2 keyword matches
+answer = run("cog-2", "cog", query)
 print("chef:", answer.replace("\n", " ")[:200])
 ```
 
-**Step 10 — Evening 3: Bob's isolation.** Run a thread for a new guest. The profile loads empty, Bob's `remember` call writes to *his* namespace, and the closing print shows Amara's facts and Bob's facts side by side — two guests, two branches of the tree, zero leakage.
+**Step 10 — Evening 3: Node's isolation.** Run a thread for a new guest. The profile loads empty, Node's `remember` call writes to *his* namespace, and the closing print shows Cog's facts and Node's facts side by side — two guests, two branches of the tree, zero leakage.
 
 ```python
-# Evening 3: new guest — namespace isolation means Bob never sees Amara's facts
-print("EVENING 3 - Bob's first visit (thread: bob-1)")
-answer = run("bob-1", "bob", "Hi, I'm Bob. First time here. I don't eat pork.")
-print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("bob")) or "(no facts yet - first visit)")
+# Evening 3: new guest — namespace isolation means Node never sees Cog's facts
+print("EVENING 3 - Node's first visit (thread: node-1)")
+answer = run("node-1", "node", "Hi, I'm Node. First time here. I don't eat pork.")
+print("profile loaded:", "\n".join(f"- {f}" for f in facts_of("node")) or "(no facts yet - first visit)")
 print("chef:", answer.replace("\n", " ")[:180])
 ```
 
@@ -497,8 +497,8 @@ Close with the ledger — two guests, two namespaces, zero leakage:
 # Ledger: every guest's facts side by side + the token price of memory per chef call
 print()
 print("ledger")
-print("  amara facts:", facts_of("amara"))
-print("  bob   facts:", facts_of("bob"))
+print("  cog facts:", facts_of("cog"))
+print("  node   facts:", facts_of("node"))
 print("  decision-time tokens per chef call:", usage_calls)  # run 2 costs more (dossier in context)
 print("  model calls per chef run:", usage_counts)
 ```
@@ -518,5 +518,5 @@ print("  model calls per chef run:", usage_counts)
 - **Nodes reach the store through the injected `Runtime`** — declare `runtime: Runtime[Guest]` with a `context_schema` and the graph hands you `runtime.store` plus `runtime.context`; no globals, no plumbing (Section 7, Step 5).
 - **The write path is a tool** — the model decides what matters and `remember` persists it, so memory extraction lands in the tool-call audit trail and the model never touches namespaces (Section 7, Step 3).
 - **The read path is context** — `load_memory` rebuilds a `SystemMessage` dossier every turn, and recall appends ranked matches only when they overlap the incoming message (Section 7, Step 5).
-- **Isolation is structural** — Bob never sees Amara's facts because his namespace is a different branch of the tree, the same mechanism that keeps multi-tenant systems safe (Section 7, Step 9).
+- **Isolation is structural** — Node never sees Cog's facts because his namespace is a different branch of the tree, the same mechanism that keeps multi-tenant systems safe (Section 7, Step 9).
 - **Memory has a token price** — the dossier is context on every call in the thread, so memory must be namespaced, summarized, and retrieved, not replayed wholesale (Steps 7–10).
