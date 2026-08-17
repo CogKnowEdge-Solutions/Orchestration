@@ -10,6 +10,43 @@
 
 ---
 
+## What is a Retrieval-Augmented Agent?
+
+A retrieval-augmented agent is an agent that does **not** carry its entire knowledge base in every prompt. Instead, it carries a **tool** — a single, lightweight function that can search an external store and return only the documents relevant to the current question. The agent *decides at runtime* whether to call the tool, what query to pass, and whether the retrieved results are sufficient to answer.
+
+This is fundamentally different from "baking in" context. When you paste a 50-page policy manual into the system prompt, every single LLM call pays the full token cost of that manual — whether the question is about page 1 or page 50, or whether it even needs the manual at all. A retrieval-augmented agent pays a small fixed cost (the tool schema) on every call, and a variable cost only when it actually retrieves something. The more documents in the store, the larger the savings — retrieval cost stays roughly flat while baked-in cost grows linearly.
+
+The pattern has four stages:
+
+1. **User asks a question.** The agent receives the message with a small system prompt and a set of tools — one of which is the retriever.
+2. **Agent decides to retrieve.** The LLM inspects the question, determines it cannot answer from its training data alone, and emits a tool call for the retriever with a search query.
+3. **Retriever ranks and returns.** The retriever scores every document in the store against the query (BM25, vector similarity, or any other ranking strategy) and returns the top-k results verbatim — a few hundred tokens, not the whole corpus.
+4. **Agent synthesizes an answer.** The retrieved documents now sit in the context window alongside the original question. The LLM reads them and produces a grounded response, citing specific facts from the retrieved text.
+
+```mermaid
+flowchart TD
+    U["User question"] --> A
+    A["Agent (LLM)"] -->|decides it needs data| T["Retriever tool"]
+    T -->|query| R["Document store"]
+    R -->|top-k docs| T
+    T -->|retrieved context| A2["Agent (LLM)"]
+    A2 -->|answer| U2["User"]
+
+    style A fill:#e3f2fd,stroke:#1565c0,color:#1a1a1a
+    style A2 fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a
+    style T fill:#fff9c4,stroke:#f9a825,color:#1a1a1a
+    style R fill:#fce4ec,stroke:#c62828,color:#1a1a1a
+```
+
+Two design properties make this pattern powerful:
+
+- **On-demand cost.** The retrieval tool's schema (a name, a description, and one `query` parameter) is the only permanent context overhead. Documents enter the window only when the agent calls the tool — so a corpus of 8 documents costs about the same as a corpus of 8,000 at decision time.
+- **Pluggable backend.** The agent never knows *how* the retriever works. BM25 keyword scoring, dense vector similarity, a SQL query, or an API call — they all look identical from the agent's perspective. This means you can swap retrieval strategies without touching the agent's code or prompt.
+
+This lab builds both the retriever and the agent from scratch so you can see every piece. The retriever here is an inline BM25 scorer (~15 lines of scored math, no external dependencies); in production you would typically swap it for a vector store. The point is the *interface*, not the implementation.
+
+---
+
 ## 2. Problem Statement / Use Case Overview
 
 Everything an agent can do at run time is decided by configuration you set *before* it runs, and there are two kinds of access to configure. **Execution access** decides *how* the loop behaves: whether it may pause for approval before a tool fires, and how many steps it is allowed to take. **Knowledge access** decides *what* the model can see: whether the facts it needs are baked into every prompt or fetched on demand.
