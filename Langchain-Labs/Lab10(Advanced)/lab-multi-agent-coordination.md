@@ -267,7 +267,61 @@ The notebook has 10 code cells. Work through them in order; the last cell prints
 
 **Step 2 — Imports, the key, and the measuring instrument.** Loads `.env`, builds the same free-model factory as Labs 5–9, and defines `UsageCapture` (the callback from Labs 8–9 that records `prompt_tokens` after every LLM call). The new imports for this lab are LangGraph's graph primitives — `StateGraph`, `START`/`END`, `add_messages`, and `Command`.
 
+```python
+import os, pathlib
+from dotenv import load_dotenv
+load_dotenv(pathlib.Path(".env"))
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.messages import SystemMessage
+from langchain.agents import create_agent
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.types import Command
+from typing import Annotated, TypedDict
+
+def model():
+    return ChatOpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.environ["OPENROUTER_API_KEY"],
+                      model="nvidia/nemotron-3-super-120b-a12b:free", temperature=0)
+
+class UsageCapture(BaseCallbackHandler):
+    def __init__(self): self.calls = []
+    def on_llm_end(self, response, **kwargs):
+        usage = (response.llm_output or {}).get("token_usage", {})
+        self.calls.append(usage.get("prompt_tokens", 0))
+```
+
 **Step 3 — The support desk: six tools.** Two tools per department, all returning deterministic synthetic facts for one account. This cell is deliberately boring — the entire lab is about how these six tools behave when bound to one agent versus three.
+
+```python
+@tool
+def get_invoice(account_id: str) -> str:
+    """Look up the invoices and recent charges for a customer account."""
+    return "Invoice #INV-2214: $99.00 charged on 2026-08-01; a duplicate $99.00 charge appeared on 2026-08-12."
+@tool
+def process_refund(invoice_id: str) -> str:
+    """Issue a refund for an invoice. Returns the refund confirmation."""
+    return f"Refund of $99.00 initiated for {invoice_id}; it will appear in 5-7 business days."
+@tool
+def check_service_status() -> str:
+    """Check whether the API and dashboard are healthy right now."""
+    return "API gateway DEGRADED: HTTP 503 for ~20% of requests since 2026-08-12 09:00 UTC. Dashboard healthy; engineering investigating."
+@tool
+def search_kb(problem: str) -> str:
+    """Search the help-center knowledge base for a troubleshooting article."""
+    return "KB-301: 503s are usually transient. Retry with backoff, check the status page, escalate if it persists past 60 minutes."
+@tool
+def get_plan(account_id: str) -> str:
+    """Return the current plan, seat count, and monthly price for an account."""
+    return "Current plan: Team (10 seats) at $99/month. Maximum seats on this plan: 25."
+@tool
+def set_seats(account_id: str, seats: int) -> str:
+    """Change the number of seats on an account and return the new total."""
+    return f"Seats updated: account now has {seats} seats at $99/month."
+
+ALL_TOOLS = [get_invoice, process_refund, check_service_status, search_kb, get_plan, set_seats]
+```
 
 **Step 4 — The baseline: one agent with all six tools.**
 
@@ -282,6 +336,18 @@ print("first-call input tokens:", cap_base.calls[0])
 Write down `cap_base.calls[0]` — that is the decision-time context every ticket pays for. The agent answers correctly; the architecture is the problem, not the answer.
 
 **Step 5 — Split the desk: three specialists.** Each department is its own `create_agent` with its own system prompt and only its own two tools. Same model, same instrument. A billing ticket never sees the `check_service_status` schema, and a broken tech tool can never crash billing.
+
+```python
+billing = create_agent(model=model(), tools=[get_invoice, process_refund],
+    system_prompt=("You are the billing specialist for a SaaS support desk. Use get_invoice to check charges "
+                   "and process_refund to issue refunds. Reply to the customer in one or two sentences."))
+tech = create_agent(model=model(), tools=[check_service_status, search_kb],
+    system_prompt=("You are the tech-support specialist for a SaaS support desk. Use check_service_status to "
+                   "check for outages and search_kb for troubleshooting. Reply in one or two sentences."))
+account = create_agent(model=model(), tools=[get_plan, set_seats],
+    system_prompt=("You are the account manager for a SaaS support desk. Use get_plan and set_seats to manage "
+                   "plans and seats. Reply to the customer in one or two sentences."))
+```
 
 **Step 6 — The supervisor.** Three route tools (`route_billing`, `route_tech`, `route_account`), a `SUPERVISOR_PROMPT`, and a `RoutingState` whose only field is `messages: Annotated[list, add_messages]`. Two node factories to study:
 
@@ -306,7 +372,81 @@ def specialist_node(agent):
 
 The supervisor's tool call *is* the routing decision; the `Command` is the graph's way of moving. `build_desk` assembles the star and is written as a helper because Step 8 calls it again with handoff-capable agents.
 
+```python
+@tool
+def route_billing() -> str:
+    """Route the ticket to Billing: charges, invoices, refunds, payment failures, pricing."""
+    return "routed to billing"
+@tool
+def route_tech() -> str:
+    """Route the ticket to Tech Support: outages, errors, API problems, bugs."""
+    return "routed to tech"
+@tool
+def route_account() -> str:
+    """Route the ticket to Account Management: plan upgrades, seat counts, contracts, cancellation."""
+    return "routed to account"
+
+ROUTE_TO_NODE = {"route_billing": "billing", "route_tech": "tech", "route_account": "account"}
+route_log, specialist_log = [], []
+
+SUPERVISOR_PROMPT = ("You are the routing supervisor of a SaaS support desk. Read the ticket and route it to "
+                     "exactly one department by calling the matching route tool. Billing: money (charges, "
+                     "invoices, refunds, payments). Tech: service problems (outages, errors, API issues, bugs). "
+                     "Account: contracts and plans (upgrades, seats, cancellation). "
+                     "Pick the department that can resolve the request.")
+
+class RoutingState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+def supervisor_node(state):
+    router = model().bind_tools([route_billing, route_tech, route_account])
+    cap = UsageCapture()
+    response = router.invoke([SystemMessage(content=SUPERVISOR_PROMPT)] + state["messages"], config={"callbacks": [cap]})
+    call = response.tool_calls[0]["name"] if response.tool_calls else "route_tech"
+    route_log.append((call, cap.calls[0]))
+    return Command(goto=ROUTE_TO_NODE[call])
+
+def specialist_node(agent):
+    def node(state):
+        cap = UsageCapture()
+        result = agent.invoke({"messages": state["messages"]}, config={"callbacks": [cap]})
+        specialist_log.append(cap.calls[0])
+        return {"messages": result["messages"]}
+    return node
+
+def build_desk(billing, tech, account):
+    graph = StateGraph(RoutingState)
+    graph.add_node("supervisor", supervisor_node)
+    graph.add_node("billing", specialist_node(billing))
+    graph.add_node("tech", specialist_node(tech))
+    graph.add_node("account", specialist_node(account))
+    graph.add_edge(START, "supervisor")
+    for name in ("billing", "tech", "account"): graph.add_edge(name, END)
+    return graph.compile()
+
+desk = build_desk(billing, tech, account)
+```
+
 **Step 7 — Run the desk.** Two tickets, two routes. Compare `billing_route[1]` (the router's decision-time tokens) with `cap_base.calls[0]` from Step 4: the router pays less to *decide*, and the specialist that answers pays its own small context. The routing decision is a separate, cheap model call — that is the pattern working.
+
+```python
+TICKET_BILLING = "Account acct-2214: I was charged $99 twice this month. Please refund the duplicate charge."
+TICKET_TECH = "Account acct-2214: the API has been returning HTTP 503 errors all week. Is there an outage?"
+
+route_log.clear(); specialist_log.clear()
+answer = desk.invoke({"messages": [("human", TICKET_BILLING)]})
+billing_route = route_log[0]; billing_tokens = specialist_log[0]
+print("ticket:", TICKET_BILLING[:64])
+print("router ->", billing_route)
+print("answer :", str(answer["messages"][-1].content)[:120].replace("\n", " "))
+
+route_log.clear(); specialist_log.clear()
+answer = desk.invoke({"messages": [("human", TICKET_TECH)]})
+tech_route = route_log[0]; tech_tokens = specialist_log[0]
+print("ticket:", TICKET_TECH[:64])
+print("router ->", tech_route)
+print("answer :", str(answer["messages"][-1].content)[:120].replace("\n", " "))
+```
 
 **Step 8 — Add handoffs.** The transfer tools are the second use of `Command` — this time from a *tool*, returning `Command(goto=..., graph=Command.PARENT)`. Note the guard:
 
@@ -325,9 +465,65 @@ def transfer_to_tech(reason: str) -> Command:
 
 Rebuild the specialists with the transfer tools bound, rebuild the desk with `build_desk`, and define the cross-department ticket.
 
+```python
+handoff_budget, transfer_log = {"left": 1}, []
+@tool
+def transfer_to_tech(reason: str) -> Command:
+    """Transfer the ticket to the tech-support specialist when the problem is a service or API issue."""
+    if handoff_budget["left"] <= 0:
+        return "You already transferred this ticket once. Resolve it yourself with your own tools."
+    handoff_budget["left"] -= 1
+    transfer_log.append("transfer_to_tech")
+    return Command(goto="tech", graph=Command.PARENT)
+@tool
+def transfer_to_billing(reason: str) -> Command:
+    """Transfer the ticket to the billing specialist when the problem is really about charges or invoices."""
+    if handoff_budget["left"] <= 0:
+        return "You already transferred this ticket once. Resolve it yourself with your own tools."
+    handoff_budget["left"] -= 1
+    transfer_log.append("transfer_to_billing")
+    return Command(goto="billing", graph=Command.PARENT)
+
+billing_hd = create_agent(model=model(), tools=[get_invoice, process_refund, transfer_to_tech],
+    system_prompt=("You are the billing specialist. Use get_invoice and process_refund for charges. If the "
+                   "customer's complaint is really about service reliability (outages, errors) rather than "
+                   "charges, call transfer_to_tech to hand the ticket to tech support."))
+tech_hd = create_agent(model=model(), tools=[check_service_status, search_kb, transfer_to_billing],
+    system_prompt=("You are the tech-support specialist. Use check_service_status and search_kb for service "
+                   "problems. If the customer's complaint is really about charges rather than service, call "
+                   "transfer_to_billing."))
+account_hd = create_agent(model=model(), tools=[get_plan, set_seats, transfer_to_tech, transfer_to_billing],
+    system_prompt=("You are the account manager. Use get_plan and set_seats for plan changes; "
+                   "transfer the ticket to the right specialist for anything else."))
+
+desk = build_desk(billing_hd, tech_hd, account_hd)
+
+TICKET_HANDOFF = ("Account acct-2214: I'm on the enterprise plan but the API has been returning HTTP 503s "
+                  "for days. I want a refund for the downtime.")
+```
+
 **Step 9 — Watch the escalation.** Run the handoff ticket. Expect the router to pick `route_billing` (the ask is a refund), Billing to call `transfer_to_tech`, and Tech to check the outage and resolve. `transfer_log` shows the jump; `specialist_log` holds the finishing specialist's context (the transferring specialist's post-`Command` code is skipped by design — the jump hands control away mid-run).
 
+```python
+route_log.clear(); specialist_log.clear(); transfer_log.clear(); handoff_budget["left"] = 1
+answer = desk.invoke({"messages": [("human", TICKET_HANDOFF)]})
+print("ticket:", TICKET_HANDOFF[:72])
+print("router ->", route_log[0])
+print("transfer:", transfer_log)
+print("final specialist first-call tokens:", specialist_log)
+print("answer :", str(answer["messages"][-1].content)[:130].replace("\n", " "))
+```
+
 **Step 10 — Close the ledger.** The closing cell prints all four numbers. Read the tradeoff honestly: the single agent pays one big context; the multi-agent run pays a cheap router plus a focused specialist. It is not a per-request bargain — it is a bounded-context, isolation, and extensibility play.
+
+```python
+print("context ledger — first model call per participant:")
+print(f"  baseline single agent : {cap_base.calls[0]:>5} tokens  (1 prompt + all 6 tool schemas)")
+print(f"  supervisor (router)   : {billing_route[1]:>5} tokens  (routing prompt + 3 route tools)")
+print(f"  billing specialist    : {billing_tokens:>5} tokens  (department prompt + 2 tools)")
+print(f"  tech specialist       : {tech_tokens:>5} tokens  (department prompt + 2 tools)")
+print("  handoff run            : router -> billing -> (transfer_to_tech) -> tech")
+```
 
 ---
 
