@@ -49,6 +49,22 @@ When this lab works, you'll see:
 
 You'll know it worked when the LangSmith UI shows your trace with the correct run type labels.
 
+### Trace List View
+
+Your LangSmith dashboard should show traces like this:
+
+![Trace List](images/tracing_list.png)
+
+Each row is a trace — you'll see `simple_chat_completion` (direct LLM call) and `question_answering_chain` (chain wrapping LLM) with their inputs, outputs, and latency.
+
+### Trace Detail View
+
+Click into the chain trace to see the nested hierarchy:
+
+![Trace Detail](images/tracing%20detail%20view.png)
+
+The `question_answering_chain` trace shows a parent `chain` run containing a child `llm` run — this is the run tree hierarchy in action.
+
 ---
 
 ## 5. Tech Stack
@@ -57,7 +73,7 @@ You'll know it worked when the LangSmith UI shows your trace with the correct ru
 - **LangSmith SDK** `langsmith>=0.1.0` — for configuring tracing
 - **OpenAI SDK** `openai>=1.0.0` — for the LLM calls (OpenRouter is OpenAI-compatible)
 - **dotenv** `python-dotenv>=1.0.0` — for loading API keys from `.env`
-- **Model**: `deepseek/deepseek-chat-v3-0324:free` (free on OpenRouter, fast and reliable)
+- **Model**: `nvidia/nemotron-3-super-120b-a12b:free` (free Nemotron model on OpenRouter)
 - **LangSmith account** — free tier works for this lab
 
 Cost: $0 — using OpenRouter's free tier.
@@ -277,7 +293,7 @@ We use OpenAI's SDK but point it to OpenRouter's endpoint. OpenRouter is OpenAI-
 def simple_chat(user_message: str) -> str:
     """Call chat model via OpenRouter with a single message."""
     response = openai_client.chat.completions.create(
-        model="deepseek/deepseek-chat-v3-0324:free",  # Free model on OpenRouter
+        model="nvidia/nemotron-3-super-120b-a12b:free",  # Free Nemotron model on OpenRouter
         messages=[{"role": "user", "content": user_message}]
     )
     return response.choices[0].message.content
@@ -375,7 +391,7 @@ This shows all your traces side by side. The first has a single `llm` run; the s
 
 ## 10. Optional Exercise
 
-**Swap the model from `deepseek/deepseek-chat-v3-0324:free` to `meta-llama/llama-4-scout:free`** and run both the direct call and the wrapper chain again. Compare the traces in LangSmith UI — notice how the token counts and latency change. Update the `simple_chat` function's model parameter and re-run all cells.
+**Swap the model from `nvidia/nemotron-3-super-120b-a12b:free` to `meta-llama/llama-4-scout:free`** and run both the direct call and the wrapper chain again. Compare the traces in LangSmith UI — notice how the token counts and latency change. Update the `simple_chat` function's model parameter and re-run all cells.
 
 ---
 
