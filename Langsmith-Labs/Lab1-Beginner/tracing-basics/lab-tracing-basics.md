@@ -24,17 +24,17 @@ When runs call other runs (a function calls an LLM, which calls a tool), they fo
 
 Run types classify what each run does:
 
-| Type | What it captures | This lab? |
-|------|------------------|-----------|
-| `llm` | Model input/output, tokens, latency | Yes |
-| `chain` | Wrapping operation containing child runs | Yes |
-| `tool` | Tool/function execution | No (Lab 2) |
-| `retriever` | Document retrieval for RAG | No (Lab 3) |
-| `embedding` | Vector embedding generation | No (Lab 3) |
-| `prompt` | Prompt template rendering | No (Lab 4) |
-| `parser` | Output parsing (JSON, etc.) | No (Lab 4) |
+| Type | What it captures |
+|------|------------------|
+| `llm` | Model input/output, tokens, latency |
+| `chain` | Wrapping operation containing child runs |
+| `tool` | Tool/function execution |
+| `retriever` | Document retrieval for RAG |
+| `embedding` | Vector embedding generation |
+| `prompt` | Prompt template rendering |
+| `parser` | Output parsing (JSON, etc.) |
 
-This lab demonstrates `llm` and `chain` — the foundation every other run type builds on.
+Every LangSmith trace is built from these run types. This lab focuses on `llm` and `chain` — the foundation the rest build on.
 
 ---
 
