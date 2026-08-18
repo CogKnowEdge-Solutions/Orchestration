@@ -135,10 +135,10 @@ graph TB
     C --> T1
     C --> L2
     
-    style C fill:#e1f5ff
-    style L1 fill:#fff9c4
-    style T1 fill:#ffe0b2
-    style L2 fill:#fff9c4
+    style C fill:#1565c0,color:#fff
+    style L1 fill:#fff8e1,color:#000
+    style T1 fill:#bf360c,color:#fff
+    style L2 fill:#fff8e1,color:#000
 ```
 
 The **chain run** is the parent — it represents the overall operation. Inside it, individual **LLM runs**, **tool runs**, and other operations are children. This hierarchy lets you see the full picture: which LLM call took the longest, which tool failed, and where time was spent.
