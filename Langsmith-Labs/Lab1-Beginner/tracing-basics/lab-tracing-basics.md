@@ -4,45 +4,13 @@
 
 ---
 
-### What is Tracing?
-
-Tracing records every step your code takes — LLM calls, tool executions, chains — and sends them to LangSmith where you can search, filter, and analyze them. Instead of guessing why your app is slow or broken, you see exactly what happened, when, and how long it took.
-
-### What is a Run?
-
-A **run** is a single unit of work inside a trace — one function call, one LLM request, one tool execution. Every run captures:
-
-- **Input**: what you passed in
-- **Output**: what came back
-- **Latency**: how long it took
-- **Tokens**: how many tokens were consumed (for LLM calls)
-- **Status**: success or error
-
-When runs call other runs (a function calls an LLM, which calls a tool), they form a **trace** — a tree of related runs. The top-level run is the **root**, and everything it calls are **children**.
-
-### Run Types
-
-Run types classify what each run does:
-
-| Type | What it captures |
-|------|------------------|
-| `llm` | Model input/output, tokens, latency |
-| `chain` | Wrapping operation containing child runs |
-| `tool` | Tool/function execution |
-| `retriever` | Document retrieval for RAG |
-| `embedding` | Vector embedding generation |
-| `prompt` | Prompt template rendering |
-| `parser` | Output parsing (JSON, etc.) |
-
-Every LangSmith trace is built from these run types. This lab focuses on `llm` and `chain` — the foundation the rest build on.
+You'll learn the core LangSmith concepts — tracing, runs, run types, and the `@traceable` decorator — and see them in action through hands-on cells.
 
 ---
 
 ## 1. Problem Statement / Use Case Overview
 
-When building AI applications with LangChain, you need visibility into what's happening under the hood. LangSmith provides tracing — a way to record every step your code takes, from LLM calls to tool executions. Without tracing, debugging is guesswork. With it, you can see exactly where things slow down, where tokens are spent, and where errors occur.
-
-This lab teaches you how to instrument your code with LangSmith's `@traceable` decorator, understand the anatomy of a trace, and recognize the different run types LangSmith captures. You'll build a baseline trace that becomes the reference point for every future LangChain lab.
+You'll instrument a simple chat completion with LangSmith's `@traceable` decorator, inspect the resulting trace, and compare a direct LLM call against a wrapped chain to see the run tree hierarchy in action. This lab produces the baseline trace you'll reference in every future LangChain lab.
 
 ---
 
@@ -433,7 +401,7 @@ This shows all your traces side by side. The first has a single `llm` run; the s
 
 - **LangSmith tracing** provides visibility into every step of your AI application
 - **The `@traceable` decorator** is the simplest way to add tracing to any function
-- **Run types** classify operations: `llm` for model calls, `chain` for wrapping operations, `tool` for tool executions, `retriever` for document retrieval, `embedding` for vector generation, `prompt` for template rendering, `parser` for output parsing
+- **Run types** classify operations — this lab focused on `llm` (model calls) and `chain` (wrapping operations)
 - **The run tree hierarchy** shows parent-child relationships: chains contain LLM calls, tools, and other operations
 - **Traces are automatic** — once decorated, LangSmith records inputs, outputs, latency, tokens, and costs without extra code
 - **OpenRouter's free models** let you experiment without API costs — just sign up and get a key
