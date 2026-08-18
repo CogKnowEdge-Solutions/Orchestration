@@ -4,6 +4,40 @@
 
 ---
 
+### What is Tracing?
+
+Tracing records every step your code takes — LLM calls, tool executions, chains — and sends them to LangSmith where you can search, filter, and analyze them. Instead of guessing why your app is slow or broken, you see exactly what happened, when, and how long it took.
+
+### What is a Run?
+
+A **run** is a single unit of work inside a trace — one function call, one LLM request, one tool execution. Every run captures:
+
+- **Input**: what you passed in
+- **Output**: what came back
+- **Latency**: how long it took
+- **Tokens**: how many tokens were consumed (for LLM calls)
+- **Status**: success or error
+
+When runs call other runs (a function calls an LLM, which calls a tool), they form a **trace** — a tree of related runs. The top-level run is the **root**, and everything it calls are **children**.
+
+### Run Types
+
+Run types classify what each run does:
+
+| Type | What it captures | This lab? |
+|------|------------------|-----------|
+| `llm` | Model input/output, tokens, latency | Yes |
+| `chain` | Wrapping operation containing child runs | Yes |
+| `tool` | Tool/function execution | No (Lab 2) |
+| `retriever` | Document retrieval for RAG | No (Lab 3) |
+| `embedding` | Vector embedding generation | No (Lab 3) |
+| `prompt` | Prompt template rendering | No (Lab 4) |
+| `parser` | Output parsing (JSON, etc.) | No (Lab 4) |
+
+This lab demonstrates `llm` and `chain` — the foundation every other run type builds on.
+
+---
+
 ## 1. Problem Statement / Use Case Overview
 
 When building AI applications with LangChain, you need visibility into what's happening under the hood. LangSmith provides tracing — a way to record every step your code takes, from LLM calls to tool executions. Without tracing, debugging is guesswork. With it, you can see exactly where things slow down, where tokens are spent, and where errors occur.
