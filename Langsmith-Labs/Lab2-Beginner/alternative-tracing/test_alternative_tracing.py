@@ -1,5 +1,5 @@
 """
-Test file for Lab 2: Alternative Ways to Trace & Conversational Threads
+Test file for Lab 2: Alternative Ways to Trace
 
 Run with: pytest test_alternative_tracing.py -v
 """
@@ -56,12 +56,11 @@ class TestTraceContextManager:
         assert "trace" in usage_pattern
 
     def test_trace_accepts_metadata(self):
-        """trace() accepts a metadata dict for custom tags like thread_id."""
+        """trace() accepts a metadata dict for custom tags."""
         from langsmith import trace
         # Metadata is passed as the second argument
-        metadata = {"method": "context_manager", "thread_id": "abc-123"}
-        assert "thread_id" in metadata
-        assert len(metadata) == 2
+        metadata = {"method": "context_manager"}
+        assert "method" in metadata
 
     def test_trace_groups_multiple_operations(self):
         """trace() groups multiple operations into a single trace."""
@@ -113,50 +112,6 @@ class TestLangChainCallbacks:
         assert requires_manual_tracing is False
 
 
-class TestThreadId:
-    """Tests for thread_id metadata grouping."""
-
-    def test_thread_id_is_uuid(self):
-        """thread_id should be a UUID string for uniqueness."""
-        import uuid
-        thread_id = str(uuid.uuid4())
-        assert len(thread_id) == 36  # UUID format: 8-4-4-4-12
-        assert thread_id.count("-") == 4
-
-    def test_thread_id_attached_as_metadata(self):
-        """thread_id is passed via the metadata dict in trace()."""
-        import uuid
-        thread_id = str(uuid.uuid4())
-        metadata = {"thread_id": thread_id}
-        assert "thread_id" in metadata
-        assert metadata["thread_id"] == thread_id
-
-    def test_same_thread_id_groups_runs(self):
-        """Runs with the same thread_id appear as one conversation thread."""
-        import uuid
-        thread_id = str(uuid.uuid4())
-
-        # Simulate two turns with the same thread_id
-        turn_1_metadata = {"thread_id": thread_id}
-        turn_2_metadata = {"thread_id": thread_id}
-
-        assert turn_1_metadata["thread_id"] == turn_2_metadata["thread_id"]
-
-    def test_different_thread_ids_create_separate_threads(self):
-        """Different thread_ids create separate conversation threads."""
-        import uuid
-        thread_1 = str(uuid.uuid4())
-        thread_2 = str(uuid.uuid4())
-
-        assert thread_1 != thread_2
-
-    def test_thread_id_enables_conversation_tracking(self):
-        """thread_id lets you follow multi-turn conversations as one unit."""
-        # In LangSmith UI, runs with the same thread_id are grouped
-        groupable = True
-        assert groupable is True
-
-
 class TestTracingComparison:
     """Tests for comparing the three mechanisms."""
 
@@ -174,15 +129,6 @@ class TestTracingComparison:
         }
         assert len(scenarios) == 3
         assert scenarios["openai_sdk_only"] == "wrap_openai"
-
-    def test_all_mechanisms_support_thread_id(self):
-        """All three mechanisms can attach thread_id metadata."""
-        mechanisms_support_thread_id = {
-            "wrap_openai": True,
-            "trace_context_manager": True,
-            "langchain_callbacks": True,
-        }
-        assert all(mechanisms_support_thread_id.values())
 
 
 class TestOpenRouterSetup:

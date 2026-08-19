@@ -1,4 +1,4 @@
-# Lab 2: Alternative Ways to Trace & Conversational Threads
+# Lab 2: Alternative Ways to Trace
 
 ## Difficulty: Beginner | ~35 min | Requires Lab 1
 
@@ -8,7 +8,7 @@
 
 LangSmith offers multiple ways to trace your code, and each method suits a different scenario. The `@traceable` decorator from Lab 1 works well for simple functions, but what if you want to trace an OpenAI client directly, control exactly which operations are grouped, or trace an entire LangChain chain automatically?
 
-This lab teaches you three alternative tracing mechanisms — `wrap_openai`, the `trace()` context manager, and LangChain's callback tracer — and shows how to use `thread_id` metadata to group multi-turn conversations into a single thread in the LangSmith dashboard.
+This lab teaches you three alternative tracing mechanisms — `wrap_openai`, the `trace()` context manager, and LangChain's callback tracer — and when to use each one.
 
 ---
 
@@ -26,12 +26,11 @@ The lab is self-contained — you provide your OpenRouter and LangSmith API keys
 
 ## 3. Processing
 
-The processing pipeline covers three tracing mechanisms and one metadata pattern:
+The processing pipeline covers three tracing mechanisms:
 
 1. **wrap_openai** — wrap an OpenAI client and make traced calls through it
 2. **trace() context manager** — manually group operations into a trace
 3. **LangChain callbacks** — trace a full chain with tool calls automatically
-4. **thread_id** — tag multiple turns with the same thread ID to group them
 
 Each mechanism is isolated in its own cells so you can run and inspect incrementally.
 
@@ -45,9 +44,8 @@ When this lab works, you'll see:
 - The `wrap_openai` trace showing an `llm` run with token counts and latency
 - The `trace()` context manager trace showing a `chain` run containing an `llm` child
 - The LangChain trace showing a chain with `llm` and `tool` child runs
-- Multiple turns grouped under a single `thread_id`, appearing as one conversation thread
 
-You'll know it worked when the LangSmith UI shows traces from all three mechanisms and the thread_id turns are grouped together.
+You'll know it worked when the LangSmith UI shows traces from all three mechanisms.
 
 ---
 
@@ -78,16 +76,10 @@ graph TB
     W["wrap_openai<br/>Wrap client once, all calls traced"]
     T["trace() context manager<br/>Manual grouping with metadata"]
     L["LangChain callbacks<br/>Automatic chain/agent tracing"]
-    R["thread_id<br/>Group related runs into threads"]
-
-    W --> R
-    T --> R
-    L --> R
 
     style W fill:#1565c0,color:#fff
     style T fill:#bf360c,color:#fff
     style L fill:#2e7d32,color:#fff
-    style R fill:#4a148c,color:#fff
 ```
 
 **wrap_openai** is ideal when you're using the OpenAI SDK directly — you wrap the client once and every `client.chat.completions.create()` call is traced automatically. No decorator needed on each function.
@@ -95,7 +87,7 @@ graph TB
 - **Use when:** You're making direct OpenAI/OpenRouter API calls and want zero-effort tracing across your entire codebase.
 - **Avoid when:** You're not using the OpenAI SDK, or you need fine-grained control over which calls get traced.
 
-**trace() context manager** is ideal when you need manual control — you decide exactly which operations go into a trace and can add custom metadata like `thread_id`. It's a `with` block that starts and ends a trace.
+**trace() context manager** is ideal when you need manual control — you decide exactly which operations go into a trace and can add custom metadata. It's a `with` block that starts and ends a trace.
 
 - **Use when:** You want to group multiple unrelated operations into one trace, add custom metadata, or trace non-OpenAI code.
 - **Avoid when:** You want automatic tracing with no setup — `wrap_openai` or `@traceable` are simpler for those cases.
@@ -104,12 +96,6 @@ graph TB
 
 - **Use when:** You're building with LangChain chains, agents, or retrievers and want the full execution tree traced automatically.
 - **Avoid when:** You're not using LangChain — the callback system won't help outside that ecosystem.
-
-All three mechanisms can attach `thread_id` metadata to group related runs into a conversation thread.
-
-### Thread ID and Conversational Threads
-
-When building chat applications, you often need to see the full conversation history as one unit. By tagging each turn with the same `thread_id`, LangSmith groups those runs into a single thread in the dashboard — making it easy to follow multi-turn interactions.
 
 ---
 
@@ -277,41 +263,7 @@ LangChain's callback system automatically traces the LLM call and any tool invoc
 
 ---
 
-### Cell 6: Method 4 — Grouping with thread_id
-
-```python
-import uuid
-
-thread_id = str(uuid.uuid4())
-
-with trace("turn_1", metadata={"thread_id": thread_id}) as ts:
-    response = openai_client.chat.completions.create(
-        model="nvidia/nemotron-3-super-120b-a12b:free",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "My name is Edge."}
-        ]
-    )
-    print(f"Turn 1: {response.choices[0].message.content}")
-
-with trace("turn_2", metadata={"thread_id": thread_id}) as ts:
-    response = openai_client.chat.completions.create(
-        model="nvidia/nemotron-3-super-120b-a12b:free",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "My name is Edge."},
-            {"role": "assistant", "content": "Hello Edge! How can I help you today?"},
-            {"role": "user", "content": "What's my name?"}
-        ]
-    )
-    print(f"Turn 2: {response.choices[0].message.content}")
-```
-
-Two turns tagged with the same `thread_id` appear as one conversation thread in LangSmith.
-
----
-
-### Cell 7: Inspect Traces
+### Cell 6: Inspect Traces
 
 ```python
 from langsmith import Client
@@ -343,7 +295,5 @@ Queries LangSmith to verify all traces were recorded successfully.
 - **`wrap_openai`** wraps an OpenAI client so every API call is automatically traced — no decorator needed
 - **`trace()` context manager** gives manual control over tracing — group operations and add custom metadata
 - **LangChain callbacks** automatically trace chains, agents, and tool calls without extra code
-- **`thread_id` metadata** groups related runs into a single conversation thread in LangSmith
 - **Three mechanisms, one dashboard** — all tracing methods send data to the same LangSmith project
 - **Beginner-friendly tracing** — each method is shown in isolation so you can choose the one that fits your use case
-- **Thread grouping** is essential for chat applications where you need to see the full conversation history
