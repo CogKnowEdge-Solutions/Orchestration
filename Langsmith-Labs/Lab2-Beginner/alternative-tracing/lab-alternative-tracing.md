@@ -214,6 +214,8 @@ print(f"Response: {response.choices[0].message.content}")
 
 `wrap_openai` wraps the client so every API call is automatically traced. No decorator needed.
 
+Here's how the trace appears in LangSmith — a single `llm` run with the input message, output, token counts, and latency all captured automatically:
+
 ![wrap_openai trace](Images/2plus2.png)
 
 ---
@@ -235,6 +237,8 @@ print(f"Response: {answer}")
 ```
 
 The `trace()` context manager wraps multiple operations into a single trace. You control exactly what's included and can add custom metadata.
+
+The trace shows a `chain` run (the `with` block) containing the `llm` call as a child — this is how `trace()` groups operations together:
 
 ![trace context manager](Images/france.png)
 
@@ -271,6 +275,8 @@ else:
 ```
 
 LangChain's callback system automatically traces the LLM call and any tool invocations — no manual setup needed.
+
+The trace captures the full execution tree — the LLM decides to call the `add` tool, and both the tool call and its result appear as child runs:
 
 ![LangChain callback trace](Images/3plus5.png)
 
