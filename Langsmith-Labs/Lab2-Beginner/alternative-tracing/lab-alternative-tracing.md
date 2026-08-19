@@ -4,24 +4,6 @@
 
 ---
 
-### What is wrap_openai?
-
-`wrap_openai` is a function from the LangSmith SDK that wraps an OpenAI client so every API call is automatically traced. Instead of decorating individual functions, you wrap the client once and all calls through it appear in LangSmith.
-
-### What is the trace() Context Manager?
-
-The `trace()` context manager gives you manual control over tracing. You define exactly which operations go into a trace by wrapping them in a `with` block — useful when you need to group multiple unrelated calls or add custom metadata.
-
-### What is LangChain's Callback Tracer?
-
-LangChain has a built-in callback system that automatically traces chains, agents, and retrievers. When you use `@traceable` on chain functions, LangChain records the full execution tree — including tool calls, retriever lookups, and nested LLM calls — without any extra setup.
-
-### What is thread_id?
-
-A `thread_id` is a metadata tag you attach to traces to group related runs together. In LangSmith, runs with the same `thread_id` appear as a single conversation thread, making it easy to follow multi-turn interactions.
-
----
-
 ## 1. Problem Statement / Use Case Overview
 
 LangSmith offers multiple ways to trace your code, and each method suits a different scenario. The `@traceable` decorator from Lab 1 works well for simple functions, but what if you want to trace an OpenAI client directly, control exactly which operations are grouped, or trace an entire LangChain chain automatically?
