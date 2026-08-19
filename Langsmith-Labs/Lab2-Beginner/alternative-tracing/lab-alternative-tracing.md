@@ -92,9 +92,18 @@ graph TB
 
 **wrap_openai** is ideal when you're using the OpenAI SDK directly — you wrap the client once and every `client.chat.completions.create()` call is traced automatically. No decorator needed on each function.
 
+- **Use when:** You're making direct OpenAI/OpenRouter API calls and want zero-effort tracing across your entire codebase.
+- **Avoid when:** You're not using the OpenAI SDK, or you need fine-grained control over which calls get traced.
+
 **trace() context manager** is ideal when you need manual control — you decide exactly which operations go into a trace and can add custom metadata like `thread_id`. It's a `with` block that starts and ends a trace.
 
+- **Use when:** You want to group multiple unrelated operations into one trace, add custom metadata, or trace non-OpenAI code.
+- **Avoid when:** You want automatic tracing with no setup — `wrap_openai` or `@traceable` are simpler for those cases.
+
 **LangChain callbacks** are ideal when you're using LangChain chains and agents — the callback system traces the full execution tree automatically, including tool calls and retriever lookups, without any extra code.
+
+- **Use when:** You're building with LangChain chains, agents, or retrievers and want the full execution tree traced automatically.
+- **Avoid when:** You're not using LangChain — the callback system won't help outside that ecosystem.
 
 All three mechanisms can attach `thread_id` metadata to group related runs into a conversation thread.
 
