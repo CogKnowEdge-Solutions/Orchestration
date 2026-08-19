@@ -256,7 +256,14 @@ llm = ChatOpenAI(
 
 llm_with_tools = llm.bind_tools([add])
 response = llm_with_tools.invoke([HumanMessage(content="What is 3 + 5?")])
-print(f"Response: {response.content}")
+
+# The LLM may return empty content but include tool_calls — extract the result
+if response.tool_calls:
+    tc = response.tool_calls[0]
+    result = add.invoke(tc["args"])
+    print(f"Tool called: {tc['name']}({tc['args']}) = {result}")
+else:
+    print(f"Response: {response.content}")
 ```
 
 LangChain's callback system automatically traces the LLM call and any tool invocations — no manual setup needed.
