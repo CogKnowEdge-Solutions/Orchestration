@@ -143,6 +143,7 @@ Without datasets, evaluating an LLM is subjective ("this response looks good"). 
 ### Step 1: Install dependencies
 
 ```python
+# Install all required packages at pinned versions for reproducibility
 !pip install -qU "langsmith>=0.1.0" "langchain==1.2.15" "langchain-core==1.2.28" "langchain-openai==1.1.12" "python-dotenv==1.2.2" "pydantic==2.13.4" "pandas>=2.0.0"
 ```
 
@@ -157,10 +158,14 @@ import os
 from dotenv import load_dotenv
 from langsmith import Client
 
+# Load API keys from .env file
 load_dotenv()
+
+# Verify required keys are present — fail early with a clear message
 assert os.getenv("OPENROUTER_API_KEY"), "Missing OPENROUTER_API_KEY in .env"
 assert os.getenv("LANGSMITH_API_KEY"), "Missing LANGSMITH_API_KEY in .env"
 
+# Initialize the LangSmith client (talks to LangSmith's servers)
 ls_client = Client()
 print("Environment loaded and LangSmith client initialized")
 ```
@@ -175,13 +180,15 @@ Loads API keys from `.env` and initializes the LangSmith client — this is what
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+# Create the LLM client pointing to OpenRouter (free tier)
 model = ChatOpenAI(
     model="nvidia/nemotron-3.5-lightning:free",
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY"),
-    temperature=0,
+    temperature=0,  # Deterministic output for consistent dataset entries
 )
 
+# Schema that defines what structured data we want from each review
 class ProductReview(BaseModel):
     product: str = Field(description="The exact product being reviewed")
     rating: int = Field(description="The star rating, from 1 to 5")
@@ -195,6 +202,7 @@ This sets up the structured-output agent from LangChain Lab 3. The `ProductRevie
 ### Step 4: Generate structured outputs from review texts
 
 ```python
+# 10 varied product reviews covering different ratings and sentiments
 review_texts = [
     "I bought the 'AeroPress Coffee Maker' two weeks ago. Best coffee ever. Five stars.",
     "The 'Ergonomic Office Chair' arrived broken. Customer service never replied. One star.",
@@ -208,12 +216,16 @@ review_texts = [
     "My 'Running Shoes' are lightweight and supportive. Five stars.",
 ]
 
+# Bind the Pydantic schema to the model so it returns ProductReview objects
 structured_model = model.with_structured_output(ProductReview)
+
+# Run the structured-output agent on each review to extract fields
 parsed_reviews = []
 for review_text in review_texts:
     parsed = structured_model.invoke(review_text)
     parsed_reviews.append(parsed)
 
+# Preview the first 5 parsed results
 for p in parsed_reviews[:5]:
     print(f"{p.product} | rating {p.rating}/5 | {p.sentiment}")
 print(f"\nParsed {len(parsed_reviews)} reviews into structured objects")
@@ -226,15 +238,16 @@ These 10 reviews cover a range of products, ratings (1-5), and sentiments. Runni
 ### Step 5: Create a dataset and add examples from the structured outputs
 
 ```python
-# Delete existing datasets with the same names (clean slate)
+# Clean up any existing datasets with these names (idempotent re-runs)
 for ds_name in ["product-reviews", "product-reviews-from-traces", "product-reviews-csv"]:
     try:
         existing = ls_client.read_dataset(dataset_name=ds_name)
         ls_client.delete_dataset(dataset_id=existing.id)
         print(f"  Deleted existing dataset: {ds_name}")
     except Exception:
-        pass
+        pass  # Dataset doesn't exist yet, nothing to delete
 
+# Create a new empty dataset in LangSmith
 dataset = ls_client.create_dataset(
     dataset_name="product-reviews",
     description="Product reviews with structured output (product, rating, sentiment)"
@@ -243,8 +256,8 @@ dataset = ls_client.create_dataset(
 # Batch-add all examples at once: inputs and outputs are lists of dicts
 ls_client.create_examples(
     dataset_id=dataset.id,
-    inputs=[{"review_text": rt} for rt in review_texts],
-    outputs=[p.model_dump() for p in parsed_reviews],
+    inputs=[{"review_text": rt} for rt in review_texts],      # raw review as input
+    outputs=[p.model_dump() for p in parsed_reviews],          # structured output as expected answer
 )
 
 print(f"Created dataset '{dataset.name}' with {len(parsed_reviews)} examples")
@@ -257,6 +270,7 @@ This creates an empty dataset in LangSmith, then adds each review as an example:
 ### Step 6: Create examples manually via the SDK
 
 ```python
+# Manually defined inputs and expected outputs (no LLM needed)
 manual_inputs = [
     {"review_text": "The 'Premium Blender' is fantastic. Five stars."},
     {"review_text": "My 'Laptop Stand' wobbles constantly. Two stars."},
@@ -268,6 +282,7 @@ manual_outputs = [
     {"product": "Ceramic Mug Set", "rating": 3, "sentiment": "neutral"},
 ]
 
+# Add them to the same dataset using create_examples()
 ls_client.create_examples(
     dataset_id=dataset.id,
     inputs=manual_inputs,
@@ -283,22 +298,24 @@ This is the manual approach: you write the inputs and expected outputs yourself.
 ### Step 7: Convert traces into examples
 
 ```python
+# Query existing LLM traces from LangSmith (these were captured during Step 4)
 traces = list(ls_client.list_runs(
     project_name=os.getenv("LANGSMITH_PROJECT"), run_type="llm", limit=20
 ))
 
+# Create a separate dataset for the trace-based examples
 trace_dataset = ls_client.create_dataset(
     dataset_name="product-reviews-from-traces",
     description="Dataset created by converting LangSmith traces into examples"
 )
 
-# Collect valid traces with both inputs and outputs
+# Filter to only traces that have both inputs and outputs (skip incomplete ones)
 valid_traces = [t for t in traces if t.inputs and t.outputs]
 if valid_traces:
     ls_client.create_examples(
         dataset_id=trace_dataset.id,
-        inputs=[t.inputs for t in valid_traces],
-        outputs=[t.outputs for t in valid_traces],
+        inputs=[t.inputs for t in valid_traces],    # trace inputs become example inputs
+        outputs=[t.outputs for t in valid_traces],   # trace outputs become expected outputs
     )
 
 print(f"Converted {len(valid_traces)} traces into '{trace_dataset.name}'")
@@ -314,6 +331,7 @@ This is the trace-to-dataset pattern: query your traces, then map their inputs a
 import pandas as pd
 import ast
 
+# Build a small DataFrame with input/output columns (simulates a real export)
 csv_data = pd.DataFrame({
     "input": [
         {"review_text": "The 'Standing Desk' is sturdy. Five stars."},
@@ -327,17 +345,21 @@ csv_data = pd.DataFrame({
     ],
 })
 
+# Write to CSV, then read it back (mimics importing from an external source)
 csv_data.to_csv("reviews.csv", index=False)
 csv_df = pd.read_csv("reviews.csv")
 
+# Create a new dataset for the CSV-imported examples
 csv_dataset = ls_client.create_dataset(
     dataset_name="product-reviews-csv",
     description="Dataset imported from a CSV file"
 )
 
-# Parse string dicts back to actual dicts and batch-import
+# Pandas stores dicts as strings in CSV — convert them back to actual dicts
 csv_inputs = [ast.literal_eval(row["input"]) for _, row in csv_df.iterrows()]
 csv_outputs = [ast.literal_eval(row["output"]) for _, row in csv_df.iterrows()]
+
+# Import all rows as examples in one batch
 ls_client.create_examples(
     dataset_id=csv_dataset.id,
     inputs=csv_inputs,
@@ -354,9 +376,13 @@ This writes a small CSV, reads it back, and imports each row as a dataset exampl
 ### Step 9: Organize examples into splits
 
 ```python
+# List all examples in the CSV dataset
 all_examples = list(ls_client.list_examples(dataset_id=csv_dataset.id))
+
+# Calculate 80/20 train/test split
 split_idx = int(len(all_examples) * 0.8)
 
+# Tag each example with its split using update_example()
 for ex in all_examples[:split_idx]:
     ls_client.update_example(example_id=ex.id, split="train")
 for ex in all_examples[split_idx:]:
@@ -372,14 +398,19 @@ Splits let you organize examples into named subsets. When you run an evaluation,
 ### Step 10: Verify the dataset in LangSmith
 
 ```python
+# Re-read the dataset to verify everything looks correct
 csv_dataset = ls_client.read_dataset(dataset_name="product-reviews-csv")
 all_examples = list(ls_client.list_examples(dataset_id=csv_dataset.id))
+
+# Filter examples by their split metadata
 train = [e for e in all_examples if e.metadata.get("dataset_split", ["base"])[0] == "train"]
 test = [e for e in all_examples if e.metadata.get("dataset_split", ["base"])[0] == "test"]
+
 print(f"Dataset: {csv_dataset.name}")
 print(f"  Total examples: {len(all_examples)}")
 print(f"  Train: {len(train)} | Test: {len(test)}")
 
+# Show a sample to confirm inputs/outputs look right
 sample = all_examples[0]
 print(f"\nSample (ID: {sample.id}):")
 print(f"  Input: {sample.inputs}")
