@@ -63,7 +63,7 @@ Each row is a trace — you'll see `simple_chat_completion` (direct LLM call) an
 
 Click into the chain trace to see the nested hierarchy:
 
-![Trace Detail](images/tracing%20detail%20view.png)
+![Trace Detail](images/tracing%20detail.png)
 
 The `question_answering_chain` trace shows a parent `chain` run containing a child `llm` run — this is the run tree hierarchy in action.
 
