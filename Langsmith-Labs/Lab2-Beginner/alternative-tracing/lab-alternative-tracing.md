@@ -289,7 +289,7 @@ with trace("turn_1", metadata={"thread_id": thread_id}) as ts:
         model="nvidia/nemotron-3-super-120b-a12b:free",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "My name is Alice."}
+            {"role": "user", "content": "My name is Edge."}
         ]
     )
     print(f"Turn 1: {response.choices[0].message.content}")
@@ -299,8 +299,8 @@ with trace("turn_2", metadata={"thread_id": thread_id}) as ts:
         model="nvidia/nemotron-3-super-120b-a12b:free",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "My name is Alice."},
-            {"role": "assistant", "content": "Hello Alice! How can I help you today?"},
+            {"role": "user", "content": "My name is Edge."},
+            {"role": "assistant", "content": "Hello Edge! How can I help you today?"},
             {"role": "user", "content": "What's my name?"}
         ]
     )
