@@ -47,7 +47,7 @@ After completing this lab, you will have:
 
 ![LangSmith Dataset UI — product-reviews dataset](images/product_review.png)
 
-The screenshot above shows the `product-reviews` dataset in LangSmith. Notice the **Dataset name** (`product-reviews`) at the top, the **Input** column (raw review text), and the **Reference Output** column (structured output with product, rating, and sentiment). The **Examples tab** is highlighted to show where you are in the UI.
+The image above shows the `product-reviews` dataset in LangSmith. Notice the **Dataset name** (`product-reviews`) at the top, the **Input** column (raw review text), and the **Reference Output** column (structured output with product, rating, and sentiment). The **Examples tab** is highlighted to show where you are in the UI.
 
 | Dataset | Examples | Source | Splits |
 |---------|----------|--------|--------|
