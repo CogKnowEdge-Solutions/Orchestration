@@ -44,9 +44,11 @@ When this lab works, you'll see:
 - A list of prompts in your workspace (including the one you just pushed)
 - The pulled prompt template printed with its input variables
 - A formatted prompt message ready to send to an LLM
-- An LLM response generated from the prompt you pulled from the Hub
+- An LLM response generated from the prompt you pushed from the Hub
 
-You'll know it worked when you see the prompt URL printed after the push and the LLM response printed after the pull-and-test step.
+![LangSmith Prompt Hub — tool-selector prompt](images/prompt.png)
+
+The image above shows your prompt in the LangSmith Prompt Hub UI. The **prompt name** (`tool-selector-test`) appears at the top, the **Messages** section shows the system and user prompts, and the **Code Snippet** section provides the Python code to use the prompt programmatically. Notice the **Playground** button for testing and the **Environments** section for deploying to staging or production.
 
 ---
 
