@@ -37,11 +37,19 @@ LangSmith datasets store these input/output example pairs and let you version th
 
 After completing this lab, you will have:
 
-- A LangSmith dataset named `product-reviews` containing 15–20 examples
+- A LangSmith dataset named `product-reviews` containing 13 examples
 - Each example has an input (review text) and output (structured `ProductReview` dict with product, rating, sentiment)
-- A second dataset (`product-reviews-csv`) created by importing a CSV file
-- Both datasets organized with split metadata (train/test)
-- All data visible in the LangSmith UI under the Datasets tab
+- A second dataset (`product-reviews-from-traces`) created by converting traces
+- A third dataset (`product-reviews-csv`) created by importing a CSV file, with train/test splits
+- All three datasets visible in the LangSmith UI under the **Datasets** tab
+
+### What to Expect in LangSmith UI
+
+| Dataset | Examples | Source | Splits |
+|---------|----------|--------|--------|
+| `product-reviews` | 13 | SDK (10 generated + 3 manual) | None |
+| `product-reviews-from-traces` | varies | Converted from LLM traces | None |
+| `product-reviews-csv` | 3 | CSV import | train, test |
 
 ---
 
@@ -418,7 +426,27 @@ print(f"  Output: {sample.outputs}")
 print(f"  Split: {sample.metadata.get('dataset_split', ['base'])[0]}")
 ```
 
-This prints a summary of your dataset: total examples, count per split, and a sample. You can also view this dataset in the LangSmith UI under the Datasets tab.
+This prints a summary of your dataset: total examples, count per split, and a sample.
+
+### Step 11: Verify in the LangSmith UI
+
+Open [https://smith.langchain.com](https://smith.langchain.com) and check the following:
+
+**Datasets tab** (left sidebar → Datasets):
+- `product-reviews` — should show 13 examples (10 generated + 3 manual). Click into it to see each input/output pair.
+- `product-reviews-from-traces` — examples converted from your LLM traces. The count depends on how many traces had both inputs and outputs.
+- `product-reviews-csv` — should show 3 examples imported from CSV, with train/test split labels visible in the split column.
+
+**Traces tab** (left sidebar → your project `lab-3-datasets`):
+- You should see LLM traces from Step 4 (the structured-output agent runs on 10 reviews). Each trace shows the input review text and the structured output.
+
+**What to click:**
+1. Go to **Datasets** → click `product-reviews` → you'll see a table of all 13 examples with Input and Output columns
+2. Click any example row to expand it — verify the input is review text and the output is a `{product, rating, sentiment}` dict
+3. Go back to Datasets → click `product-reviews-csv` → check that the Split column shows "train" or "test" for each example
+4. Go to **Traces** → find your project → click any LLM trace → you should see the review text as input and the model's structured response as output
+
+If all three datasets appear with correct inputs/outputs, Lab 3 is complete. These datasets are consumed by Lab 5 (Writing Custom Evaluators) and Lab 6 (Running Experiments).
 
 ---
 
