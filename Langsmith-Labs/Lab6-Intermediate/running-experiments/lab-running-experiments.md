@@ -90,12 +90,12 @@ graph LR
     B --> E["metadata: {middleware: text-norm,<br/>variant: with}"]
     B --> F["Per-Example Scores"]
     
-    style A fill:#e1f5ff
-    style B fill:#fff9c4
-    style C fill:#c8e6c9
-    style D fill:#c8e6c9
-    style E fill:#c8e6c9
-    style F fill:#ffe0b2
+    style A fill:#1565c0,color:#fff
+    style B fill:#bf360c,color:#fff
+    style C fill:#2e7d32,color:#fff
+    style D fill:#2e7d32,color:#fff
+    style E fill:#2e7d32,color:#fff
+    style F fill:#6a1b9a,color:#fff
 ```
 
 In the LangSmith UI, you can filter experiments by metadata keys, group experiments by tags, and compare their aggregate scores side by side. This is what makes systematic A/B testing of configurations possible.
@@ -124,14 +124,14 @@ graph TB
     ExpA --> C
     ExpB --> C
     
-    style D fill:#e1f5ff
-    style A fill:#c8e6c9
-    style B fill:#ffccbc
-    style E1 fill:#fff9c4
-    style E2 fill:#fff9c4
-    style ExpA fill:#c8e6c9
-    style ExpB fill:#ffccbc
-    style C fill:#e1f5ff
+    style D fill:#1565c0,color:#fff
+    style A fill:#2e7d32,color:#fff
+    style B fill:#bf360c,color:#fff
+    style E1 fill:#6a1b9a,color:#fff
+    style E2 fill:#6a1b9a,color:#fff
+    style ExpA fill:#2e7d32,color:#fff
+    style ExpB fill:#bf360c,color:#fff
+    style C fill:#c62828,color:#fff
 ```
 
 **Why this matters:** Without controlled comparison, you're guessing whether a change helped. With it, you have data. This pattern scales to any configuration variable — model choice, prompt template, chunking strategy, retrieval method — and is the foundation of systematic LLM optimization.

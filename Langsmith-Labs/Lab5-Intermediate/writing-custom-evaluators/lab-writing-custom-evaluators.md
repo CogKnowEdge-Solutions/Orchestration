@@ -85,11 +85,11 @@ graph LR
     C --> F["Score<br/>bool, int, float"]
     D --> F
     E --> F
-    style A fill:#e1f5ff
-    style C fill:#c8e6c9
-    style D fill:#fff9c4
-    style E fill:#ffe0b2
-    style F fill:#e1f5ff
+    style A fill:#1565c0,color:#fff
+    style C fill:#2e7d32,color:#fff
+    style D fill:#bf360c,color:#fff
+    style E fill:#6a1b9a,color:#fff
+    style F fill:#c62828,color:#fff
 ```
 
 **1. Heuristic evaluators** use pure logic — no LLM calls. They check structural properties: Does the output parse against a schema? Is a field within a valid range? Is a required key present? These are fast, deterministic, and cheap.
